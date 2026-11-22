@@ -190,3 +190,23 @@ svg.i { width: 1em; height: 1em; stroke: currentColor; fill: none; stroke-width:
 .drop-here { font-size: .78rem; color: var(--faint); padding: 10px 12px; margin-top: 4px; border: 1px dashed #cfcdc6; border-radius: 10px; }
 body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; }
 @media (prefers-reduced-motion: reduce) { .drag-clone { animation: none; transform: none; } }
+
+/* ── 시작 화면 (앱을 새로 켤 때 한 번, 목업 .grill/bottari-splash-mockup.html A안 "묶기", 2026-11-22) ── */
+#splash { position: fixed; inset: 0; z-index: 90; background: var(--paper); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: opacity 260ms ease, transform 260ms var(--ease); animation: s-safety 0s 3s forwards; }
+#splash.out { opacity: 0; transform: scale(1.03); pointer-events: none; }
+@keyframes s-safety { to { visibility: hidden; pointer-events: none; } } /* JS가 멈춰도 3초 뒤엔 앱이 보이게 */
+#splash .s-mark { width: 96px; height: 96px; overflow: visible; margin-bottom: 10px; }
+#splash .s-body, #splash .s-earl, #splash .s-earr, #splash .s-knot { transform-box: fill-box; }
+#splash .s-body { transform-origin: 50% 100%; opacity: 0; transform: translateY(10px) scale(.92); }
+#splash .s-earl { transform-origin: 100% 92%; opacity: 0; transform: rotate(-75deg) scale(.6); }
+#splash .s-earr { transform-origin: 0% 92%; opacity: 0; transform: rotate(75deg) scale(.6); }
+#splash .s-knot { transform-origin: 50% 50%; transform: scale(0); }
+#splash .s-body.in { opacity: 1; transform: none; transition: opacity 160ms ease, transform 320ms var(--ease); }
+#splash .s-earl.in, #splash .s-earr.in { opacity: 1; transform: none; transition: opacity 120ms ease, transform 400ms cubic-bezier(.34, 1.56, .64, 1); }
+#splash .s-knot.in { transform: none; transition: transform 260ms cubic-bezier(.34, 1.56, .64, 1); }
+#splash .s-word { font-size: 52px; color: var(--ink); display: flex; align-items: center; height: 58px; }
+#splash .s-word span { display: inline-block; opacity: 0; transform: translateY(6px); }
+#splash .s-word span.in { opacity: 1; transform: none; transition: opacity 90ms ease, transform 180ms var(--ease); }
+#splash .s-tag { font-size: 13px; color: var(--faint); margin-top: 10px; opacity: 0; transition: opacity 220ms ease; }
+#splash .s-tag.in { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { #splash { display: none; } }

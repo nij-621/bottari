@@ -34,6 +34,18 @@
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
 </svg>
 
+<!-- 시작 화면: JS보다 먼저 그려지게 HTML에 둠. 움직임은 app.js splash() (목업 .grill/bottari-splash-mockup.html A안) -->
+<div id="splash" aria-hidden="true">
+  <svg class="s-mark" viewBox="0 34 180 130">
+    <g class="s-body"><path d="M 58 86 C 30 96, 24 140, 40 148 C 60 156, 120 156, 140 148 C 156 140, 150 96, 122 86 C 108 92, 72 92, 58 86 Z" fill="var(--mk)"/><path d="M 72 96 C 64 112, 62 128, 66 144 M 108 96 C 116 112, 118 128, 114 144" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="3" stroke-linecap="round"/></g>
+    <path class="s-earl" d="M 84 77 C 70 52, 50 42, 43 55 C 38 66, 62 79, 82 83 Z" fill="var(--km)"/>
+    <path class="s-earr" d="M 96 77 C 110 52, 130 42, 137 55 C 142 66, 118 79, 98 83 Z" fill="var(--km)"/>
+    <ellipse class="s-knot" cx="90" cy="81" rx="12" ry="9.5" fill="var(--km)"/>
+  </svg>
+  <div class="s-word pen-title"><span>B</span><span>o</span><span>t</span><span>t</span><span>a</span><span>r</span><span>i</span></div>
+  <div class="s-tag">한국에서 챙겨 올 것, 둘이 같이 적는 곳</div>
+</div>
+
 <!-- ── 로그인 ── -->
 <section id="screen-auth" hidden>
   <div class="auth-box">

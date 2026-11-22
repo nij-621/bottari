@@ -3,7 +3,7 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm";
 import { SUPABASE_URL, SUPABASE_KEY } from "./config.js";
 
-const VERSION = "2.0";
+const VERSION = "2.1";
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const NAME = { MK: "민경", KM: "규문" };
@@ -1024,5 +1024,26 @@ $("sheet-back").addEventListener("click", () => { openTripId = null; closeSheet(
 })();
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("sheet").hidden) { openTripId = null; closeSheet(); } });
 
+// 시작 화면 (목업 .grill/bottari-splash-mockup.html A안 "묶기"): 보자기 → 두 귀 묶기 → 매듭 → 글자. 약 1.3초, 누르면 끝
+async function splash() {
+  const sp = $("splash"); if (!sp) return;
+  let done = false;
+  const out = () => { if (done) return; done = true; sp.classList.add("out"); setTimeout(() => sp.remove(), 260); };
+  sp.addEventListener("click", out);
+  if (reduceMotion.matches) return sp.remove();
+  // 글씨체가 0.5초 안에 안 오면 기다리지 않고 바로 앱으로
+  const ok = await Promise.race([document.fonts.load('52px "Poor Story"', "Bottari").then(() => true), new Promise((r) => setTimeout(() => r(false), 500))]);
+  if (!ok) return out();
+  const at = (ms, fn) => setTimeout(() => { if (!done) fn(); }, ms);
+  const q = (s) => sp.querySelector(s);
+  at(0, () => q(".s-body").classList.add("in"));
+  at(200, () => { q(".s-earl").classList.add("in"); q(".s-earr").classList.add("in"); });
+  at(440, () => q(".s-knot").classList.add("in"));
+  sp.querySelectorAll(".s-word span").forEach((c, i) => at(520 + i * 60, () => c.classList.add("in")));
+  at(980, () => q(".s-tag").classList.add("in"));
+  at(1300, out);
+}
+
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js");
+splash();
 boot();
