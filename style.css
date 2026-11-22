@@ -176,3 +176,17 @@ svg.i { width: 1em; height: 1em; stroke: currentColor; fill: none; stroke-width:
   .press:active { transform: none; }
   .strike path, #sheet, .fold svg.i { transition: none; }
 }
+
+/* ── 꾹 눌러 끌기 ── */
+.it { -webkit-touch-callout: none; }
+.it.ghost { opacity: .25; }
+.drag-clone { position: fixed; z-index: 30; margin: 0; padding: 12px 12px 11px; background: var(--paper); border-radius: 12px; border: 0;
+  box-shadow: 0 12px 32px rgba(20, 20, 18, .18), 0 2px 6px rgba(20, 20, 18, .08); pointer-events: none; transform: scale(1.03); transform-origin: 50% 50%;
+  animation: lift 160ms var(--ease); }
+@keyframes lift { from { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); } }
+.drop-line { position: fixed; height: 3px; margin-top: -1px; border-radius: 2px; background: var(--ink); z-index: 29; pointer-events: none; }
+.grp.over > .sec { color: var(--ink); }
+.grp.nope { opacity: .45; }
+.drop-here { font-size: .78rem; color: var(--faint); padding: 10px 12px; margin-top: 4px; border: 1px dashed #cfcdc6; border-radius: 10px; }
+body.dragging { user-select: none; -webkit-user-select: none; cursor: grabbing; }
+@media (prefers-reduced-motion: reduce) { .drag-clone { animation: none; transform: none; } }

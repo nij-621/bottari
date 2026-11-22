@@ -3,7 +3,7 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm";
 import { SUPABASE_URL, SUPABASE_KEY } from "./config.js";
 
-const VERSION = "1.7";
+const VERSION = "1.8";
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const NAME = { MK: "민경", KM: "규문" };
@@ -20,10 +20,10 @@ const NOTOPIC = "주제 없음";
 const TOPIC_HINTS = ["쇼핑·텍스리펀", "외출·교통", "병원·예약", "행정·은행", "일본"]; // 참고 주제 예시 (자유롭게 더함)
 // 탭마다 "누르면 무엇이 되는지" 한 줄 안내 — 닫으면 그 탭에선 다시 안 뜸 (누르는 동작이 탭마다 달라서)
 const HINT = {
-  buy: "항목을 누르면 산 것으로 줄이 그어져요. 분류·주문·수량은 오른쪽 ⋯",
-  cand: "캘린더에 일정으로 넣었거나 이미 한 후보를 누르면 줄이 그어져요. 종류·날짜는 ⋯",
-  gift: "누를 때마다 살 것 → 샀음 → 줌으로 넘어가요. 받는 사람·수량은 ⋯",
-  ref: "항목을 누르면 링크가 열려요. 제목·주제는 ⋯",
+  buy: "누르면 산 것으로 줄이 그어져요. 꾹 눌러 끌면 다른 분류로 옮기거나 순서를 바꿔요. 자세한 건 ⋯",
+  cand: "일정에 넣었거나 이미 한 후보를 누르면 줄이 그어져요. 꾹 눌러 끌면 다른 장소로 옮겨요. 종류·날짜는 ⋯",
+  gift: "누를 때마다 살 것 → 샀음 → 줌. 꾹 눌러 끌면 다른 사람에게 옮겨요. 수량은 ⋯",
+  ref: "누르면 링크가 열려요. 꾹 눌러 끌면 다른 주제로 옮겨요. 제목은 ⋯",
   trip: "여행을 누르면 같이 가는 사람과 준비 체크리스트가 나와요.",
 };
 const URL_RE =/(https?:\/\/\S+|[a-z0-9-]+(?:\.[a-z0-9-]+)+\/\S*)/i;
@@ -45,7 +45,7 @@ const state = {
   tab: load("bt.tab", "buy"),
   open: { got: false, done: false, given: false, packed: false },
   place: { ...HOME_PLACE, ...load("bt.place", {}) },
-  hintsSeen: load("bt.hints", {}),
+  hintsSeen: load("bt.hints2", {}), // 2 = v1.8에서 끌기 안내가 생겨 한 번 더 보여 줌
   q: "",          // 찾기 글자 — 비어 있지 않으면 탭 대신 찾은 결과를 보여 줌
 };
 
@@ -226,12 +226,18 @@ function itemHtml(it) {
   }
   if (it.note) meta.push(`<span>${esc(it.note)}</span>`);
   if (it.link) meta.push(`<a href="${esc(it.link)}" target="_blank" rel="noopener">${I("link")}${esc(host(it.link))}</a>`);
-  return `<div class="it ${it.created_by}${isStruck(it) ? " struck" : ""}${it.kind === "ref" ? " ref" : ""}" data-id="${it.id}" role="button" tabindex="0">
+  return `<div class="it ${it.created_by}${isStruck(it) ? " struck" : ""}${it.kind === "ref" ? " ref" : ""}${it.id === state.dragId ? " ghost" : ""}" data-id="${it.id}" role="button" tabindex="0">
     <div class="tx"><span class="nm">${esc(it.text)}${it.qty > 1 ? `<span class="qty">×${it.qty}</span>` : ""}${strikeSvg(it.done_by)}</span>
     ${meta.length ? `<div class="mt">${meta.join("")}</div>` : ""}</div>
     <button class="more" data-edit="${it.id}" aria-label="고치기">${I("more")}</button></div>`;
 }
-const sec = (label, list) => list.length ? `<div class="sec">${label} <small>${list.length}</small></div>${list.map(itemHtml).join("")}` : "";
+// 묶음 안 순서: sort(끌어서 정한 순서)가 있으면 그 순서, 없으면 적은 순서
+const bySort = (list) => [...list].sort((a, b) => (a.sort ?? 1e15) - (b.sort ?? 1e15) || String(a.created_at).localeCompare(String(b.created_at)));
+// 묶음 하나. g = 끌어 놓기 정보 { kind, k: 묶음 열쇠, set: 이 묶음으로 옮기면 바뀌는 칸 (null이면 안에서 순서만) }
+// showEmpty = 끄는 중에는 빈 분류도 놓을 자리로 보여 줌
+const sec = (label, list, g, showEmpty) => (list.length || showEmpty)
+  ? `<div class="grp"${g ? ` data-g="${esc(JSON.stringify(g))}"` : ""}><div class="sec">${label} <small>${list.length || ""}</small></div>${list.length ? bySort(list).map(itemHtml).join("") : `<p class="drop-here">여기로 끌어 놓기</p>`}</div>`
+  : "";
 const fold = (key, label, list) => !list.length ? "" :
   `<button class="fold press${state.open[key] ? " open" : ""}" data-fold="${key}">${label} ${list.length}${I("down")}</button>${state.open[key] ? list.map(itemHtml).join("") : ""}`;
 
@@ -264,15 +270,17 @@ function render() {
     const cats = [...BUY_CATS, NOCAT].map((c) => [c, here.filter((x) => (BUY_CATS.includes(x.cat) ? x.cat : NOCAT) === c)]);
     const away = new Map();
     for (const x of todo) if (x.place && x.place !== "한국") { if (!away.has(x.place)) away.set(x.place, []); away.get(x.place).push(x); }
+    const dragBuy = items.find((x) => x.id === state.dragId)?.kind === "buy";
     html = !mine.length ? `<p class="empty">살 게 생기면 아래에 한 줄 적어요. 상대 화면에도 바로 떠요.</p>`
-      : sec("주문함", ord) + cats.map(([c, l]) => sec(c, l)).join("")
-      + [...away].map(([p, l]) => sec(`${esc(p)}에서`, l)).join("") + fold("got", "받음", got);
+      : sec("주문함", ord, { kind: "buy", k: "ord", set: null })
+      + cats.map(([c, l]) => sec(c, l, { kind: "buy", k: "c:" + c, set: { cat: c === NOCAT ? null : c, place: "한국" } }, dragBuy && c !== NOCAT)).join("")
+      + [...away].map(([p, l]) => sec(`${esc(p)}에서`, l, { kind: "buy", k: "p:" + p, set: { place: p } })).join("") + fold("got", "받음", got);
     // 받아 올 것(어머님 반찬 등) — 사는 게 아니라 받아서 들고 오는 것. 귀국 전날 여기만 훑으면 됨
     const bring = items.filter((x) => x.kind === "bring");
     const bLive = bring.filter((x) => !isStruck(x) || recent.has(x.id));
-    html += `<div class="sec">받아 올 것 <small>${bLive.length || ""}</small><button class="sec-add press" id="bring-add">+ 더하기</button></div>`
-      + bLive.map(itemHtml).join("")
-      + (bring.length ? "" : `<p class="empty sm">어머님 반찬처럼 받아서 들고 올 것을 적어요. 어느 집에서 받는지 남겨 두면 귀국 전날 여기만 보면 돼요.</p>`)
+    html += `<div class="grp" data-g="${esc(JSON.stringify({ kind: "bring", k: "bring", set: null }))}"><div class="sec">받아 올 것 <small>${bLive.length || ""}</small><button class="sec-add press" id="bring-add">+ 더하기</button></div>`
+      + bySort(bLive).map(itemHtml).join("")
+      + (bring.length ? "" : `<p class="empty sm">어머님 반찬처럼 받아서 들고 올 것을 적어요. 어느 집에서 받는지 남겨 두면 귀국 전날 여기만 보면 돼요.</p>`) + `</div>`
       + fold("packed", "챙긴 것", bring.filter((x) => x.status === "got" && !recent.has(x.id)));
   } else if (tab === "gift") {
     // 받는 사람별로 묶음(처음 적은 순서), 받는 사람 없는 건 맨 아래 "나눠 줄 것"
@@ -283,7 +291,7 @@ function render() {
     if (groups.has(ANYONE)) order.push(ANYONE);
     const notYet = mine.filter((x) => x.status === "todo").length, packed = mine.filter((x) => x.status === "got").length;
     html = (mine.length ? `<p class="summary">아직 안 산 것 <b>${notYet}</b> · 캐리어에 <b>${packed}</b></p>` : "")
-      + order.map((k) => sec(k, groups.get(k))).join("") + fold("given", "준 것", mine.filter((x) => x.status === "done" && !recent.has(x.id)));
+      + order.map((k) => sec(esc(k), groups.get(k), { kind: "gift", k: "r:" + k, set: { recipient: k === ANYONE ? null : k } })).join("") + fold("given", "준 것", mine.filter((x) => x.status === "done" && !recent.has(x.id)));
     if (!mine.length) html = `<p class="empty">한국에 들고 갈 선물을 적어요. <b>엄마: 마너 초콜릿</b>처럼 앞에 받는 사람을 쓰면 사람별로 묶여요. 받는 사람 없이 쓰면 "나눠 줄 것"에 모여요.</p>`;
   } else if (tab === "ref") {
     // 주제별로 묶음(많은 주제 먼저), 주제 없는 건 맨 아래
@@ -291,7 +299,7 @@ function render() {
     for (const x of mine) { const k = x.topic || NOTOPIC; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(x); }
     const order = [...groups.keys()].filter((k) => k !== NOTOPIC).sort((a, b) => groups.get(b).length - groups.get(a).length);
     if (groups.has(NOTOPIC)) order.push(NOTOPIC);
-    html = order.map((k) => sec(esc(k), groups.get(k))).join("");
+    html = order.map((k) => sec(esc(k), groups.get(k), { kind: "ref", k: "t:" + k, set: { topic: k === NOTOPIC ? null : k } })).join("");
     if (!mine.length) html = `<p class="empty">휴가 때마다 다시 여는 것을 모아 둬요. 텍스리펀 방법, 서울 인파레이더처럼요. 링크를 붙여넣거나 <b>제목 https://…</b>처럼 쓰면 제목과 링크가 나뉘어 들어가요. 줄은 안 그어지고 계속 남아요.</p>`;
   } else {
     const live = mine.filter(keep);
@@ -299,7 +307,7 @@ function render() {
     for (const x of live) { const k = x.place || NOPLACE; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(x); }
     const order = [...groups.keys()].filter((k) => k !== NOPLACE).sort((a, b) => groups.get(b).length - groups.get(a).length);
     if (groups.has(NOPLACE)) order.push(NOPLACE);
-    html = order.map((k) => sec(k, groups.get(k))).join("") + fold("done", "일정에 넣은 것", mine.filter((x) => x.status === "done" && !recent.has(x.id)));
+    html = order.map((k) => sec(esc(k), groups.get(k), { kind: "cand", k: "p:" + k, set: { place: k === NOPLACE ? null : k } })).join("") + fold("done", "일정에 넣은 것", mine.filter((x) => x.status === "done" && !recent.has(x.id)));
     if (!mine.length) html = `<p class="empty">하고 싶은 것·먹고 싶은 것·만날 사람이 생각나면 한 줄 적어요. 장소는 나중에 붙여도 돼요.</p>`;
   }
   $("list").innerHTML = html;
@@ -347,6 +355,7 @@ function tripLabel() {
 
 // ───────────────────────────── 누르기: 긋기 / 고치기 / 접기
 $("list").addEventListener("click", (e) => {
+  if (performance.now() - dragEndedAt < 500) { e.preventDefault(); return; } // 끌기를 마친 손가락이 "누르기"로 읽히지 않게
   if (e.target.closest("a")) return;
   const tc = e.target.closest("[data-trip]");
   if (tc) return openTrip(tc.dataset.trip);
@@ -363,6 +372,114 @@ $("list").addEventListener("click", (e) => {
 $("list").addEventListener("keydown", (e) => {
   if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("it")) { e.preventDefault(); e.target.click(); }
 });
+
+// ───────────────────────────── 꾹 눌러 끌기: 다른 묶음에 놓으면 분류·장소·받는 사람·주제가 바뀌고, 같은 묶음이면 순서만
+// 그냥 누르기(줄 긋기)·쓸어 올리기(스크롤)와 겹치지 않게 0.4초 꾹 눌러야 들림. 그 전에 8px 넘게 움직이면 스크롤로 봄
+const LONG_PRESS = 400;
+let press = null, drag = null, dragEndedAt = 0;
+const gOf = (el) => { try { return JSON.parse(el.closest(".grp")?.dataset.g || "null"); } catch { return null; } };
+$("list").addEventListener("pointerdown", (e) => {
+  if (e.pointerType === "mouse" && e.button !== 0) return;
+  const row = e.target.closest(".it");
+  if (!row || e.target.closest(".more, a") || !gOf(row) || state.q.trim()) return;
+  press = { id: row.dataset.id, x: e.clientX, y: e.clientY, timer: setTimeout(startDrag, LONG_PRESS) };
+});
+$("list").addEventListener("contextmenu", (e) => { if (press || drag) e.preventDefault(); }); // 길게 누르기 메뉴 막기
+document.addEventListener("pointermove", (e) => {
+  if (drag) { drag.y = e.clientY; drag.x = e.clientX; return moveDrag(); }
+  if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 8) cancelPress();
+  else if (press) { press.x = e.clientX; press.y = e.clientY; }
+});
+document.addEventListener("pointerup", () => { if (drag) endDrag(true); else cancelPress(); });
+document.addEventListener("pointercancel", () => { if (drag) endDrag(false); else cancelPress(); });
+// 끄는 동안엔 화면이 따라 스크롤되지 않게 (iOS는 passive: false여야 막힘)
+document.addEventListener("touchmove", (e) => { if (drag) e.preventDefault(); }, { passive: false });
+document.addEventListener("keydown", (e) => { if (drag && e.key === "Escape") endDrag(false); });
+function cancelPress() { if (press) { clearTimeout(press.timer); press = null; } }
+// 받침 따라 "로/으로" (받침 없음·ㄹ받침 → 로): 서울로, 식품으로, 엄마로
+function ro(w) {
+  const c = String(w).trim().slice(-1).charCodeAt(0) - 0xac00;
+  if (c < 0 || c > 11171) return "로";
+  const jong = c % 28;
+  return jong === 0 || jong === 8 ? "로" : "으로";
+}
+
+function startDrag() {
+  const it = items.find((x) => x.id === press?.id);
+  if (!it) return cancelPress();
+  const old = $("list").querySelector(`.it[data-id="${it.id}"]`);
+  const r = old.getBoundingClientRect();
+  drag = { it, src: gOf(old), x: press.x, y: press.y, offY: press.y - r.top, target: null };
+  press = null;
+  state.dragId = it.id; render(); // 들린 자리는 흐리게, 살 것은 빈 분류도 놓을 자리로 보임
+  const row = $("list").querySelector(`.it[data-id="${it.id}"]`);
+  const clone = row.cloneNode(true);
+  clone.classList.remove("ghost"); clone.classList.add("drag-clone");
+  clone.style.left = r.left + "px"; clone.style.width = r.width + "px";
+  document.body.append(clone);
+  const line = document.createElement("div"); line.className = "drop-line"; line.hidden = true;
+  document.body.append(line);
+  Object.assign(drag, { clone, line });
+  document.body.classList.add("dragging");
+  moveDrag();
+  (function scrollLoop() { // 손가락이 화면 위·아래 끝에 가면 저절로 스크롤
+    if (!drag) return;
+    const s = $("scr"), sr = s.getBoundingClientRect(), edge = 70;
+    const v = drag.y < sr.top + edge ? -(sr.top + edge - drag.y) / 4 : drag.y > sr.bottom - edge ? (drag.y - (sr.bottom - edge)) / 4 : 0;
+    if (v) { s.scrollTop += v; moveDrag(); }
+    requestAnimationFrame(scrollLoop);
+  })();
+}
+function moveDrag() {
+  const { clone, line, y, it, src } = drag;
+  clone.style.top = (y - drag.offY) + "px";
+  // 손가락 아래 묶음 찾기 (끄는 사본은 pointer-events: none)
+  const under = document.elementFromPoint(Math.min(Math.max(drag.x, 30), innerWidth - 30), y);
+  const grpEl = under?.closest("#list .grp[data-g]");
+  document.querySelectorAll("#list .grp.over, #list .grp.nope").forEach((g) => g.classList.remove("over", "nope"));
+  if (!grpEl) { line.hidden = true; drag.target = null; return; }
+  const g = gOf(grpEl);
+  const ok = g.kind === it.kind && (g.k === src.k || g.set);
+  grpEl.classList.add(ok ? "over" : "nope");
+  if (!ok) { line.hidden = true; drag.target = null; return; }
+  const rows = [...grpEl.querySelectorAll(".it:not(.ghost)")];
+  let idx = rows.findIndex((rw) => { const b = rw.getBoundingClientRect(); return y < b.top + b.height / 2; });
+  if (idx < 0) idx = rows.length;
+  const ref = rows[idx]?.getBoundingClientRect() ?? (rows.length ? rows[rows.length - 1].getBoundingClientRect() : grpEl.querySelector(".sec").getBoundingClientRect());
+  const ly = rows[idx] ? ref.top : ref.bottom;
+  const gr = grpEl.getBoundingClientRect();
+  Object.assign(line.style, { top: ly - 1 + "px", left: gr.left + "px", width: gr.width + "px" });
+  line.hidden = false;
+  drag.target = { g, ids: rows.map((rw) => rw.dataset.id), idx };
+}
+async function endDrag(commit) {
+  const d = drag; drag = null; dragEndedAt = performance.now();
+  d.clone.remove(); d.line.remove();
+  document.body.classList.remove("dragging");
+  state.dragId = null;
+  const t = d.target;
+  if (!commit || !t) return render();
+  const it = d.it, moved = t.g.k !== d.src.k;
+  const ids = [...t.ids]; ids.splice(t.idx, 0, it.id);
+  const before = { sort: it.sort ?? null, ...(moved ? Object.fromEntries(Object.keys(t.g.set).map((k) => [k, it[k] ?? null])) : {}) };
+  // 놓은 묶음 안 순서를 10, 20, 30…으로 다시 매김 — 바뀐 것만 저장
+  const changes = [];
+  ids.forEach((id, i) => {
+    const x = items.find((y) => y.id === id); if (!x) return;
+    const f = {};
+    if (x.sort !== (i + 1) * 10) f.sort = (i + 1) * 10;
+    if (x === it && moved) Object.assign(f, t.g.set);
+    if (Object.keys(f).length) { Object.assign(x, f); changes.push([x, f]); }
+  });
+  render();
+  if (moved) {
+    const label = t.g.k.slice(t.g.k.indexOf(":") + 1);
+    toast(`${label}${ro(label)} 옮겼어요`, undo(it, before));
+  }
+  const results = await Promise.all(changes.map(([x, f]) => sb.from("bt_items").update(f).eq("id", x.id)));
+  const err = results.find((r) => r.error)?.error;
+  if (err) { toast(err.message.includes("sort") ? "007_sort.sql을 먼저 실행해 주세요." : "옮기지 못했어요: " + err.message); refresh(); }
+}
 
 async function toggle(it, row) {
   if (!it) return;
@@ -411,7 +528,7 @@ function goTab(t) {
   if (state.q || !$("search").hidden) { state.q = ""; $("q").value = ""; $("search").hidden = true; } // 탭을 누르면 찾기는 닫음
   render();
 }
-$("hint-x").addEventListener("click", () => { state.hintsSeen[state.tab] = true; save("bt.hints", state.hintsSeen); render(); });
+$("hint-x").addEventListener("click", () => { state.hintsSeen[state.tab] = true; save("bt.hints2", state.hintsSeen); render(); });
 $("trip-btn").addEventListener("click", () => goTab("trip"));
 document.querySelector(".tabs").addEventListener("click", (e) => {
   const b = e.target.closest("[data-tab]"); if (b) goTab(b.dataset.tab);
