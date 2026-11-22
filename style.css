@@ -1,0 +1,125 @@
+/* Bottari — "두 자루 펜" (목업 .grill/korea-trip-planner-mockup-v2.html C안)
+   흰 종이, 장식 없음. 글자 색 = 적은 사람. 강조색 따로 없음. */
+:root {
+  --mk: #c2502e;   /* 민경 펜 (Pairfolio와 같은 뜻) */
+  --km: #2b4fa1;   /* 규문 펜 */
+  --ink: #262624;
+  --faint: #8f8d85;
+  --rule: #eeece6;
+  --paper: #ffffff;
+  --wash: #f6f5f1;
+  --ease: cubic-bezier(.23, 1, .32, 1);
+  --ease-drawer: cubic-bezier(.32, .72, 0, 1);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { font-family: "Noto Sans KR", system-ui, -apple-system, sans-serif; background: var(--paper); color: var(--ink); -webkit-font-smoothing: antialiased; overscroll-behavior: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { background: none; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
+svg.i { width: 1em; height: 1em; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.press { transition: transform 140ms var(--ease); }
+.press:active { transform: scale(.97); }
+[hidden] { display: none !important; }
+
+.pen-title { font-family: "Nanum Pen Script", cursive; font-weight: 400; line-height: 1; }
+
+/* ── 로그인 ── */
+#screen-auth { min-height: 100%; display: grid; place-items: center; padding: 24px; }
+.auth-box { width: 100%; max-width: 320px; }
+.auth-box .pen-title { font-size: 4rem; }
+.auth-sub { color: var(--faint); font-size: .85rem; margin: 6px 0 28px; }
+#login-form { display: grid; gap: 14px; }
+#login-form label { display: grid; gap: 6px; font-size: .78rem; color: var(--faint); }
+#login-form input { font-size: 16px; padding: 12px; border: 1px solid var(--rule); border-radius: 10px; background: var(--wash); }
+.btn-primary { background: var(--ink); color: #fff; padding: 13px; border-radius: 10px; font-weight: 700; margin-top: 6px; text-align: center; }
+.btn-primary:disabled { opacity: .5; }
+.err { color: var(--mk); font-size: .8rem; }
+.auth-note { color: var(--faint); font-size: .74rem; margin-top: 20px; }
+
+/* ── 앱 틀 ── */
+#app { height: 100%; display: flex; flex-direction: column; max-width: 560px; margin: 0 auto; }
+#scr { flex: 1; overflow-y: auto; padding: calc(env(safe-area-inset-top, 0px) + 22px) 20px 16px; -webkit-overflow-scrolling: touch; }
+.hd { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.hd .pen-title { font-size: 3.1rem; }
+.trip { font-size: .76rem; color: var(--faint); font-weight: 500; display: inline-flex; gap: 5px; align-items: center; padding: 6px 0 6px 8px; }
+.key { display: flex; gap: 14px; font-size: .7rem; color: var(--faint); margin: 4px 0 4px; }
+.key span { display: inline-flex; align-items: center; gap: 5px; }
+.key i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.key i.mk { background: var(--mk); } .key i.km { background: var(--km); }
+
+/* ── 목록 ── */
+.sec { font-family: "Nanum Pen Script", cursive; font-size: 1.5rem; color: var(--faint); margin: 20px 0 0; line-height: 1.2; display: flex; align-items: baseline; gap: 6px; }
+.sec small { font-family: "Noto Sans KR", sans-serif; font-size: .68rem; }
+.it { display: flex; align-items: flex-start; gap: 8px; padding: 12px 0 11px; border-bottom: 1px solid var(--rule); cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+.it .tx { flex: 1; min-width: 0; }
+.nm { font-size: 1rem; font-weight: 500; line-height: 1.4; position: relative; display: inline-block; transition: opacity 200ms ease; word-break: keep-all; overflow-wrap: anywhere; }
+.it.MK .nm { color: var(--mk); } .it.KM .nm { color: var(--km); }
+.qty { font-weight: 700; margin-left: 4px; }
+/* 손으로 긋는 줄 — 그은 사람 색 */
+.strike { position: absolute; left: -3px; width: calc(100% + 6px); top: 55%; height: 10px; transform: translateY(-50%); overflow: visible; pointer-events: none; }
+.strike path { fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 1 2; stroke-dashoffset: 1; opacity: 0; transition: stroke-dashoffset 220ms var(--ease), opacity 60ms linear; }
+.it.struck .strike path { stroke-dashoffset: 0; opacity: 1; }
+.it.struck .nm { opacity: .5; }
+.strike path, .strike.by-MK path { stroke: var(--mk); }
+.strike.by-KM path { stroke: var(--km); }
+.mt { display: flex; flex-wrap: wrap; gap: 3px 10px; margin-top: 3px; font-size: .72rem; color: var(--faint); align-items: center; }
+.mt > span, .mt > a { display: inline-flex; gap: 4px; align-items: center; }
+.mt a { color: var(--faint); text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 2px; max-width: 180px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mt .tg { border: 1px solid var(--rule); border-radius: 99px; padding: 0 7px; }
+.more { color: #c9c7bf; width: 32px; height: 28px; display: grid; place-items: center; flex: none; margin: -3px -8px 0 0; }
+.more svg.i { width: 18px; height: 18px; }
+.fold { width: 100%; font-family: "Nanum Pen Script", cursive; font-size: 1.4rem; color: var(--faint); padding: 14px 0 10px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--rule); }
+.fold svg.i { margin-left: auto; width: 18px; height: 18px; transition: transform 200ms var(--ease); }
+.fold.open svg.i { transform: rotate(180deg); }
+.empty { color: var(--faint); font-size: .86rem; line-height: 1.6; padding: 28px 0; }
+
+/* ── 입력 ── */
+.inbar { display: flex; align-items: center; gap: 10px; padding: 10px 16px 10px 20px; border-top: 1px solid var(--rule); background: var(--paper); flex: none; }
+.pen-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--ink); }
+.pen-dot.MK { background: var(--mk); } .pen-dot.KM { background: var(--km); }
+.inbar input { flex: 1; min-width: 0; border: 0; outline: 0; font-size: 16px; padding: 6px 0; background: transparent; }
+.inbar input::placeholder { color: var(--faint); }
+.inbar .kind { font-size: .72rem; color: var(--faint); display: inline-flex; gap: 3px; align-items: center; padding: 6px 4px; white-space: nowrap; max-width: 92px; overflow: hidden; text-overflow: ellipsis; }
+.inbar .go { width: 36px; height: 36px; display: grid; place-items: center; flex: none; color: var(--ink); }
+.inbar .go svg.i { width: 20px; height: 20px; }
+
+.tabs { display: flex; justify-content: space-around; padding: 4px 8px calc(var(--safe-b) + 10px); flex: none; background: var(--paper); }
+.tabs button { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: .66rem; font-weight: 700; padding: 6px 22px; opacity: .4; }
+.tabs button.on { opacity: 1; }
+.tabs svg.i { width: 22px; height: 22px; }
+
+/* ── 아래에서 올라오는 시트 ── */
+#sheet-back { position: fixed; inset: 0; background: rgba(20, 20, 18, .28); opacity: 0; transition: opacity 240ms ease; z-index: 10; }
+#sheet-back.in { opacity: 1; }
+#sheet { position: fixed; left: 0; right: 0; bottom: 0; max-width: 560px; margin: 0 auto; background: var(--paper); border-radius: 18px 18px 0 0; padding: 10px 20px calc(var(--safe-b) + 18px); z-index: 11; max-height: 88vh; overflow-y: auto; transform: translateY(100%); transition: transform 300ms var(--ease-drawer); box-shadow: 0 -8px 30px rgba(0,0,0,.08); }
+#sheet.in { transform: none; }
+.grab { width: 36px; height: 4px; border-radius: 2px; background: var(--rule); margin: 0 auto 14px; }
+.sh-title { font-family: "Nanum Pen Script", cursive; font-size: 1.9rem; margin-bottom: 8px; }
+.fld { display: grid; gap: 6px; margin-top: 14px; font-size: .74rem; color: var(--faint); }
+.fld input, .fld textarea { font-size: 16px; color: var(--ink); padding: 10px 12px; border: 1px solid var(--rule); border-radius: 10px; background: var(--wash); width: 100%; }
+.fld textarea { min-height: 64px; resize: vertical; }
+.fld input.big { font-size: 17px; font-weight: 500; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.seg { display: flex; gap: 6px; flex-wrap: wrap; }
+.seg button { padding: 8px 12px; border-radius: 99px; background: var(--wash); font-size: .82rem; color: var(--ink); border: 1px solid transparent; }
+.seg button.on { background: var(--ink); color: #fff; }
+.seg button.MK.on { background: var(--mk); } .seg button.KM.on { background: var(--km); }
+.stepper { display: flex; align-items: center; gap: 0; border: 1px solid var(--rule); border-radius: 10px; background: var(--wash); width: max-content; }
+.stepper button { width: 42px; height: 40px; font-size: 1.1rem; }
+.stepper span { min-width: 34px; text-align: center; font-weight: 700; color: var(--ink); font-size: .95rem; }
+.sh-actions { display: flex; gap: 10px; margin-top: 22px; align-items: center; }
+.sh-actions .btn-primary { flex: 1; margin: 0; }
+.btn-ghost { padding: 12px 14px; border-radius: 10px; font-size: .84rem; color: var(--faint); }
+.btn-ghost.danger.armed { color: #fff; background: var(--mk); }
+.sh-meta { font-size: .72rem; color: var(--faint); margin-top: 14px; line-height: 1.6; }
+.place-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+
+#toast { position: fixed; left: 50%; bottom: calc(var(--safe-b) + 130px); transform: translate(-50%, 8px); background: var(--ink); color: #fff; font-size: .82rem; padding: 10px 16px; border-radius: 99px; opacity: 0; pointer-events: none; transition: opacity 180ms ease, transform 180ms var(--ease); z-index: 20; max-width: calc(100% - 40px); }
+#toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+@media (prefers-reduced-motion: reduce) {
+  .press:active { transform: none; }
+  .strike path, #sheet, .fold svg.i { transition: none; }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "Bottari",
+  "short_name": "Bottari",
+  "description": "한국에서 챙겨 올 것, 둘이 같이 적는 곳",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
