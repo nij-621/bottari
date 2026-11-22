@@ -68,6 +68,10 @@ svg.i { width: 1em; height: 1em; stroke: currentColor; fill: none; stroke-width:
 .mt > span, .mt > a { display: inline-flex; gap: 4px; align-items: center; }
 .mt a { color: var(--faint); text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 2px; max-width: 180px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .mt .tg { border: 1px solid var(--rule); border-radius: 99px; padding: 0 7px; }
+.mt .bought { color: var(--ink); font-weight: 500; }
+.summary { font-size: .74rem; color: var(--faint); margin: 10px 0 -6px; }
+.summary b { color: var(--ink); font-weight: 700; }
+.empty b { color: var(--ink); font-weight: 500; }
 .more { color: #c9c7bf; width: 32px; height: 28px; display: grid; place-items: center; flex: none; margin: -3px -8px 0 0; }
 .more svg.i { width: 18px; height: 18px; }
 .fold { width: 100%; font-family: "Nanum Pen Script", cursive; font-size: 1.4rem; color: var(--faint); padding: 14px 0 10px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--rule); }
