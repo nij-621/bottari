@@ -3,7 +3,7 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm";
 import { SUPABASE_URL, SUPABASE_KEY } from "./config.js";
 
-const VERSION = "1.5";
+const VERSION = "1.7";
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const NAME = { MK: "민경", KM: "규문" };
@@ -13,12 +13,20 @@ const BUY_CATS = ["식품", "뷰티", "옷·신발", "생활", "기타"];       
 const NOCAT = "분류 안 함";
 const NOPLACE = "미분류";
 const ANYONE = "나눠 줄 것";   // 선물: 받는 사람을 안 정한 것 (친구·지인용 과자 등)
-const KIND = { buy: "살 것", cand: "후보", gift: "선물", ref: "참고" };
-const TO = { buy: "살 것으로", cand: "후보로", gift: "선물로", ref: "참고로" };
-const HOME_PLACE = { buy: "한국", cand: null, gift: "오스트리아", ref: null }; // 장소 기본값 (이 값이면 태그 안 보임) · 참고는 장소 대신 주제(topic)
+const KIND = { buy: "살 것", cand: "후보", gift: "선물", ref: "참고", bring: "받아 올 것" };
+const TO = { buy: "살 것으로", cand: "후보로", gift: "선물로", ref: "참고로", bring: "받아 올 것으로" };
+const HOME_PLACE = { buy: "한국", cand: null, gift: "오스트리아", ref: null, bring: "한국" }; // 장소 기본값 (이 값이면 태그 안 보임) · 참고는 장소 대신 주제(topic)
 const NOTOPIC = "주제 없음";
 const TOPIC_HINTS = ["쇼핑·텍스리펀", "외출·교통", "병원·예약", "행정·은행", "일본"]; // 참고 주제 예시 (자유롭게 더함)
-const URL_RE = /(https?:\/\/\S+|[a-z0-9-]+(?:\.[a-z0-9-]+)+\/\S*)/i;
+// 탭마다 "누르면 무엇이 되는지" 한 줄 안내 — 닫으면 그 탭에선 다시 안 뜸 (누르는 동작이 탭마다 달라서)
+const HINT = {
+  buy: "항목을 누르면 산 것으로 줄이 그어져요. 분류·주문·수량은 오른쪽 ⋯",
+  cand: "캘린더에 일정으로 넣었거나 이미 한 후보를 누르면 줄이 그어져요. 종류·날짜는 ⋯",
+  gift: "누를 때마다 살 것 → 샀음 → 줌으로 넘어가요. 받는 사람·수량은 ⋯",
+  ref: "항목을 누르면 링크가 열려요. 제목·주제는 ⋯",
+  trip: "여행을 누르면 같이 가는 사람과 준비 체크리스트가 나와요.",
+};
+const URL_RE =/(https?:\/\/\S+|[a-z0-9-]+(?:\.[a-z0-9-]+)+\/\S*)/i;
 // 새 여행의 준비 체크리스트 — 같은 장소의 지난 여행이 있으면 그걸 복사하고, 없으면 이 목록
 const TEMPLATE = {
   "한국": ["항공권", "공항 가는 길", "한국 유심·로밍", "원화 현금", "선물 다 샀나", "집 비우기 (우편·화분·난방)", "짐 무게 확인 (갈 때·올 때)"],
@@ -35,8 +43,10 @@ const recent = new Set(); // 이번에 그은 항목 — 다시 그릴 때도 �
 const prevSt = new Map(); // 선물: 이번에 한 단계 넘긴 항목의 이전 상태 — 다시 누르면 되돌림
 const state = {
   tab: load("bt.tab", "buy"),
-  open: { got: false, done: false, given: false },
+  open: { got: false, done: false, given: false, packed: false },
   place: { ...HOME_PLACE, ...load("bt.place", {}) },
+  hintsSeen: load("bt.hints", {}),
+  q: "",          // 찾기 글자 — 비어 있지 않으면 탭 대신 찾은 결과를 보여 줌
 };
 
 const $ = (id) => document.getElementById(id);
@@ -44,9 +54,15 @@ const I = (n) => `<svg class="i" aria-hidden="true"><use href="#i-${n}"/></svg>`
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 function load(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } }
 function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
-function toast(msg) {
-  const t = $("toast"); t.textContent = msg; t.classList.add("on");
-  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("on"), 2600);
+// 안내 띠. action = { label, fn } 이면 버튼이 붙고(예: 되돌리기) 조금 더 오래 보임
+function toast(msg, action) {
+  const t = $("toast"), b = $("toast-act");
+  $("toast-text").textContent = msg;
+  b.hidden = !action; b.textContent = action?.label || "";
+  b.onclick = action ? () => { t.classList.remove("on", "act"); action.fn(); } : null;
+  t.classList.toggle("act", !!action);
+  t.classList.add("on");
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("on", "act"), action ? 4500 : 2600);
 }
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)));
 
@@ -77,6 +93,8 @@ const DEMO_ITEMS = () => {
     ...[["엄마", "마너 초콜릿", { qty: 2 }], ["엄마", "핸드크림", { status: "got", ordered_by: "MK" }], ["아버님", "슈납스", { created_by: "KM" }],
       ["어머님", "율리어스 마이늘 커피", { created_by: "KM", status: "got", ordered_by: "KM" }], [null, "모차르트쿠겔", { qty: 6 }], [null, "마너 웨하스", { qty: 4, created_by: "KM" }]]
       .map(([r, text, o]) => ({ id: uuid(), kind: "gift", recipient: r, text, place: "오스트리아", status: "todo", created_by: "MK", created_at: t(80), ...o })),
+    { id: uuid(), kind: "bring", text: "엄마 김치", ship_to: "MK", note: "작은 통 두 개로", status: "todo", created_by: "MK", created_at: t(72) },
+    { id: uuid(), kind: "bring", text: "어머님 멸치볶음", ship_to: "KM", status: "todo", created_by: "KM", created_at: t(71) },
     { id: uuid(), kind: "ref", text: "서울 인파레이더", link: "http://gjdong.vercel.app/crowd", topic: "외출·교통", status: "todo", created_by: "MK", created_at: t(70) },
     { id: uuid(), kind: "ref", text: "텍스리펀 방법", note: "공항 키오스크 → 세관 도장 → 환급 창구", topic: "쇼핑·텍스리펀", status: "todo", created_by: "MK", created_at: t(69) },
   ];
@@ -178,7 +196,7 @@ async function patch(it, fields) {
 
 // ───────────────────────────── 그리기
 const strikeSvg = (by) => `<svg class="strike by-${by || me?.member_code || "MK"}" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M1 6.5 C 18 3.5, 34 7.5, 52 5 S 84 3.8, 99 5.6"/></svg>`;
-// 줄이 그어지는 상태: 살 것 = 받음, 후보 = 잡음·함, 선물 = 줌 (선물의 "샀음"은 아직 줄 안 그음)
+// 줄이 그어지는 상태: 살 것 = 받음, 후보 = 일정에 넣음, 선물 = 줌 (선물의 "샀음"은 아직 줄 안 그음)
 const isStruck = (it) => it.kind === "ref" ? false : it.kind === "gift" ? it.status === "done" : (it.status === "got" || it.status === "done");
 
 function host(url) { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; } }
@@ -191,12 +209,20 @@ function itemHtml(it) {
     }
     // 살 것 목록은 분류·장소로 묶이니, 묶이지 않는 주문함·받음에서만 장소를 붙임
     if (it.status !== "todo" && it.place && it.place !== "한국") meta.push(`<span class="tg">${esc(it.place)}</span>`);
+  } else if (it.kind === "bring") {
+    if (it.ship_to) meta.push(`<span>${I("home")}${HOME[it.ship_to]}에서</span>`);
   } else if (it.kind === "gift") {
     if (it.status === "got" || it.status === "done") meta.push(`<span class="bought">${I("check")}${it.ordered_by ? NAME[it.ordered_by] + "이 삼" : "샀음"}</span>`);
     if (it.place && it.place !== HOME_PLACE.gift) meta.push(`<span class="tg">${esc(it.place)}</span>`);
   } else if (it.kind === "cand") {
     if (it.cat) meta.push(`<span>${esc(it.cat)}</span>`);
     if (it.scheduled) meta.push(`<span>${I("cal")}${esc(it.scheduled)}</span>`);
+  }
+  // 찾기 결과에선 원래 묶음(받는 사람·주제·장소·분류)이 안 보이니 태그로 붙여 줌
+  if (state.q.trim()) {
+    const ctx = it.kind === "gift" ? (it.recipient || ANYONE) : it.kind === "ref" ? it.topic : it.kind === "buy" ? (it.place && it.place !== "한국" ? it.place : it.cat) : it.kind === "cand" ? it.place : null;
+    if (ctx) meta.unshift(`<span class="tg">${esc(ctx)}</span>`);
+    if (isStruck(it)) meta.unshift(`<span class="tg">${{ buy: "받음", cand: "일정에 넣음", gift: "줌", bring: "챙김" }[it.kind]}</span>`);
   }
   if (it.note) meta.push(`<span>${esc(it.note)}</span>`);
   if (it.link) meta.push(`<a href="${esc(it.link)}" target="_blank" rel="noopener">${I("link")}${esc(host(it.link))}</a>`);
@@ -215,8 +241,12 @@ function render() {
   $("title").textContent = tab === "trip" ? "여행" : KIND[tab];
   document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
   $("trip-btn").innerHTML = tripLabel();
-  $("add").hidden = tab === "trip";
+  const searching = !!state.q.trim();
+  $("add").hidden = tab === "trip" || searching;
   document.querySelector(".key").hidden = tab === "trip";
+  $("hint").hidden = searching || !!state.hintsSeen[tab];
+  $("hint-text").textContent = HINT[tab] || "";
+  if (searching) { $("list").innerHTML = searchHtml(); return; }
   if (tab === "trip") { $("list").innerHTML = tripsHtml(); return; }
   const place = state.place[tab];
   $("add-place").innerHTML = tab === "ref" ? `${I("bookmark")}${esc(place || NOTOPIC)}` : `${I("pin")}${esc(place || NOPLACE)}`;
@@ -234,9 +264,16 @@ function render() {
     const cats = [...BUY_CATS, NOCAT].map((c) => [c, here.filter((x) => (BUY_CATS.includes(x.cat) ? x.cat : NOCAT) === c)]);
     const away = new Map();
     for (const x of todo) if (x.place && x.place !== "한국") { if (!away.has(x.place)) away.set(x.place, []); away.get(x.place).push(x); }
-    html = sec("주문함", ord) + cats.map(([c, l]) => sec(c, l)).join("")
+    html = !mine.length ? `<p class="empty">살 게 생기면 아래에 한 줄 적어요. 상대 화면에도 바로 떠요.</p>`
+      : sec("주문함", ord) + cats.map(([c, l]) => sec(c, l)).join("")
       + [...away].map(([p, l]) => sec(`${esc(p)}에서`, l)).join("") + fold("got", "받음", got);
-    if (!mine.length) html = `<p class="empty">살 게 생기면 아래에 한 줄 적어요. 상대 화면에도 바로 떠요.</p>`;
+    // 받아 올 것(어머님 반찬 등) — 사는 게 아니라 받아서 들고 오는 것. 귀국 전날 여기만 훑으면 됨
+    const bring = items.filter((x) => x.kind === "bring");
+    const bLive = bring.filter((x) => !isStruck(x) || recent.has(x.id));
+    html += `<div class="sec">받아 올 것 <small>${bLive.length || ""}</small><button class="sec-add press" id="bring-add">+ 더하기</button></div>`
+      + bLive.map(itemHtml).join("")
+      + (bring.length ? "" : `<p class="empty sm">어머님 반찬처럼 받아서 들고 올 것을 적어요. 어느 집에서 받는지 남겨 두면 귀국 전날 여기만 보면 돼요.</p>`)
+      + fold("packed", "챙긴 것", bring.filter((x) => x.status === "got" && !recent.has(x.id)));
   } else if (tab === "gift") {
     // 받는 사람별로 묶음(처음 적은 순서), 받는 사람 없는 건 맨 아래 "나눠 줄 것"
     const live = mine.filter(keep);
@@ -262,11 +299,33 @@ function render() {
     for (const x of live) { const k = x.place || NOPLACE; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(x); }
     const order = [...groups.keys()].filter((k) => k !== NOPLACE).sort((a, b) => groups.get(b).length - groups.get(a).length);
     if (groups.has(NOPLACE)) order.push(NOPLACE);
-    html = order.map((k) => sec(k, groups.get(k))).join("") + fold("done", "잡았거나 한 것", mine.filter((x) => x.status === "done" && !recent.has(x.id)));
+    html = order.map((k) => sec(k, groups.get(k))).join("") + fold("done", "일정에 넣은 것", mine.filter((x) => x.status === "done" && !recent.has(x.id)));
     if (!mine.length) html = `<p class="empty">하고 싶은 것·먹고 싶은 것·만날 사람이 생각나면 한 줄 적어요. 장소는 나중에 붙여도 돼요.</p>`;
   }
   $("list").innerHTML = html;
 }
+// ───────────────────────────── 찾기: 살 것·받아 올 것·후보·선물·참고를 한꺼번에
+// 띄어쓰기·대소문자 무시. 입력창은 다시 그리지 않고 목록만 다시 그림 (한글 조합이 끊기지 않게 — Mealcat에서 겪은 문제)
+const norm = (s) => String(s ?? "").toLowerCase().replace(/\s+/g, "");
+function searchHtml() {
+  const q = norm(state.q);
+  const hit = (x) => [x.text, x.note, x.recipient, x.topic, x.place, x.cat, x.link, x.ship_to && HOME[x.ship_to]].some((f) => norm(f).includes(q));
+  const found = items.filter(hit);
+  if (!found.length) return `<p class="empty">"${esc(state.q.trim())}"와 맞는 게 없어요. 다른 낱말로 찾아보거나, 없으면 아래 탭에서 바로 적어요.</p>`;
+  return ["buy", "bring", "cand", "gift", "ref"].map((k) => sec(KIND[k], found.filter((x) => x.kind === k))).join("");
+}
+function openSearch() {
+  $("search").hidden = false;
+  $("q").focus();
+}
+function closeSearch() {
+  state.q = ""; $("q").value = ""; $("search").hidden = true; render();
+}
+$("search-btn").addEventListener("click", () => ($("search").hidden ? openSearch() : closeSearch()));
+$("q-close").addEventListener("click", closeSearch);
+$("q").addEventListener("input", () => { state.q = $("q").value; $("scr").scrollTop = 0; render(); });
+$("q").addEventListener("keydown", (e) => { if (e.key === "Escape") closeSearch(); if (e.key === "Enter" && !e.isComposing) $("q").blur(); });
+
 // ───────────────────────────── 날짜
 const today = () => new Date(new Date().toDateString());
 const day = (s) => new Date(s + "T00:00:00");
@@ -292,6 +351,7 @@ $("list").addEventListener("click", (e) => {
   const tc = e.target.closest("[data-trip]");
   if (tc) return openTrip(tc.dataset.trip);
   if (e.target.closest("#trip-new")) return openTripForm(null);
+  if (e.target.closest("#bring-add")) return openBringForm();
   if (e.target.closest("#logout")) return sb.auth.signOut().then(() => location.reload());
   const ed = e.target.closest("[data-edit]");
   if (ed) return openEdit(items.find((x) => x.id === ed.dataset.edit));
@@ -310,19 +370,24 @@ async function toggle(it, row) {
   if (it.kind === "ref") return it.link ? window.open(/^https?:/i.test(it.link) ? it.link : "https://" + it.link, "_blank", "noopener") : openEdit(it);
   if (it.kind === "gift") return giftStep(it, row);
   const on = !isStruck(it);
-  const next = on ? (it.kind === "buy" ? "got" : "done") : (it.kind === "buy" && it.ordered_by ? "ord" : "todo");
+  const next = on ? (it.kind === "cand" ? "done" : "got") : (it.kind === "buy" && it.ordered_by ? "ord" : "todo");
+  const before = { status: it.status, done_by: it.done_by ?? null, done_at: it.done_at ?? null };
   recent.add(it.id);
   // 줄을 그 자리에서 먼저 긋고(0.22초), DB 반영 후 다시 그림
   const svg = row.querySelector(".strike");
   svg.setAttribute("class", "strike by-" + me.member_code);
   row.classList.toggle("struck", on);
   await new Promise((r) => setTimeout(r, 240));
-  patch(it, { status: next, done_by: on ? me.member_code : null, done_at: on ? new Date().toISOString() : null });
+  if (await patch(it, { status: next, done_by: on ? me.member_code : null, done_at: on ? new Date().toISOString() : null }))
+    toast(on ? `${{ buy: "샀음", cand: "일정에 넣음", bring: "챙김" }[it.kind]} — ${it.text}` : "되돌렸어요", undo(it, before));
 }
+// 방금 바꾼 걸 원래대로 — 안내 띠의 "되돌리기" 버튼 (탭을 옮기거나 접힌 뒤에도 바로 되돌릴 수 있게)
+const undo = (it, before) => ({ label: "되돌리기", fn: () => { recent.add(it.id); prevSt.delete(it.id); patch(it, before); } });
 
 // 선물: 누를 때마다 한 단계 — 살 것 → 샀음(캐리어) → 줌(줄 그음). 이번에 넘긴 걸 다시 누르면 되돌림
 async function giftStep(it, row) {
   let next;
+  const before = { status: it.status, ordered_by: it.ordered_by ?? null, done_by: it.done_by ?? null, done_at: it.done_at ?? null };
   if (prevSt.has(it.id)) { next = prevSt.get(it.id); prevSt.delete(it.id); }
   else { next = it.status === "todo" ? "got" : it.status === "got" ? "done" : "got"; prevSt.set(it.id, it.status); }
   recent.add(it.id);
@@ -336,10 +401,17 @@ async function giftStep(it, row) {
     row.classList.toggle("struck", next === "done");
     await new Promise((r) => setTimeout(r, 240));
   }
-  patch(it, fields);
+  const forward = (before.status === "todo" && next === "got") || (before.status === "got" && next === "done");
+  if (await patch(it, fields))
+    toast(forward ? `${next === "got" ? "샀음" : "줌"} — ${it.text}` : `${{ todo: "살 것", got: "샀음", done: "줌" }[next]}으로 되돌렸어요`, forward ? undo(it, before) : null);
 }
 
-function goTab(t) { state.tab = t; save("bt.tab", t); recent.clear(); prevSt.clear(); $("scr").scrollTop = 0; render(); }
+function goTab(t) {
+  state.tab = t; save("bt.tab", t); recent.clear(); prevSt.clear(); $("scr").scrollTop = 0;
+  if (state.q || !$("search").hidden) { state.q = ""; $("q").value = ""; $("search").hidden = true; } // 탭을 누르면 찾기는 닫음
+  render();
+}
+$("hint-x").addEventListener("click", () => { state.hintsSeen[state.tab] = true; save("bt.hints", state.hintsSeen); render(); });
 $("trip-btn").addEventListener("click", () => goTab("trip"));
 document.querySelector(".tabs").addEventListener("click", (e) => {
   const b = e.target.closest("[data-tab]"); if (b) goTab(b.dataset.tab);
@@ -402,11 +474,44 @@ function openPlacePicker() {
   $("new-place").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); ok(); } });
 }
 
+// ───────────────────────────── 받아 올 것 더하기 (살 것 탭 맨 아래 "+ 더하기")
+function openBringForm() {
+  let from = load("bt.bringFrom", me.member_code); // 마지막에 고른 집을 기억 — 한 집에서 여러 개 받을 때 덜 누르게
+  const draw = () => openSheet(`<div class="sh-title">받아 올 것</div>
+    <label class="fld">무엇을<input class="big" id="b-text" placeholder="예: 엄마 김치, 어머님 멸치볶음" enterkeyhint="done"></label>
+    <div class="fld">어느 집에서<div class="seg">${["MK", "KM"].map((c) => `<button class="${c}${from === c ? " on" : ""}" data-from="${c}">${HOME[c]}</button>`).join("")}</div></div>
+    <label class="fld">메모<input id="b-note" placeholder="예: 작은 통 두 개로, 냉동"></label>
+    <div class="sh-actions"><button class="btn-primary press" id="b-save">적기</button></div>
+    <p class="sh-meta">귀국 전날 살 것 탭 맨 아래 "받아 올 것"만 훑으면 돼요. 챙긴 건 눌러서 줄을 그어요.</p>`);
+  draw();
+  const wire = () => {
+    $("sheet").querySelectorAll("[data-from]").forEach((b) => b.addEventListener("click", () => {
+      from = b.dataset.from; save("bt.bringFrom", from);
+      $("sheet").querySelectorAll("[data-from]").forEach((x) => x.classList.toggle("on", x === b));
+    }));
+    const go = async () => {
+      const raw = $("b-text").value.trim(); if (!raw) return toast("무엇을 받아 올지 적어 주세요.");
+      const { text, qty } = parseQty(raw);
+      const row = { id: uuid(), kind: "bring", text, qty: qty > 1 ? qty : null, ship_to: from, note: $("b-note").value.trim() || null, place: "한국",
+        status: "todo", created_by: me.member_code, created_at: new Date().toISOString() };
+      items.push(row); render();
+      $("b-text").value = ""; $("b-note").value = ""; $("b-text").focus(); // 이어서 하나 더 적을 수 있게 시트는 열어 둠
+      toast(`적었어요 — ${text}`);
+      const { error } = await sb.from("bt_items").insert(row);
+      if (error) { items = items.filter((x) => x.id !== row.id); render(); toast(error.message.includes("kind_check") ? "006_bring.sql을 먼저 실행해 주세요." : "적지 못했어요: " + error.message); }
+    };
+    $("b-save").addEventListener("click", go);
+    $("b-text").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); go(); } });
+  };
+  wire();
+  setTimeout(() => $("b-text")?.focus(), 320);
+}
+
 // ───────────────────────────── 고치기 시트
 function openEdit(it) {
   if (!it) return;
   const d = { ...it };
-  const kind = it.kind, buy = kind === "buy", gift = kind === "gift", ref = kind === "ref";
+  const kind = it.kind, buy = kind === "buy", gift = kind === "gift", ref = kind === "ref", bring = kind === "bring";
   const stepper = () => `<div class="fld">수량<div class="stepper"><button data-q="-1" aria-label="하나 빼기">−</button><span id="e-qty">${d.qty || 1}</span><button data-q="1" aria-label="하나 더">+</button></div></div>`;
   const stSeg = (opts) => `<div class="fld">상태<div class="seg" id="e-st">
         ${opts.map(([v, l]) => `<button class="${d.status === v ? "on" : ""}" data-st="${v}">${l}</button>`).join("")}</div></div>`;
@@ -427,14 +532,20 @@ function openEdit(it) {
       ` : gift ? `
       ${stepper()}
       ${stSeg([["todo", "살 것"], ["got", "샀음 · 캐리어"], ["done", "줌"]])}
+      ` : bring ? `
+      <div class="fld">어느 집에서<div class="seg" id="e-ship">
+        ${["MK", "KM"].map((c) => `<button class="${c}${d.ship_to === c ? " on" : ""}" data-ship="${c}">${HOME[c]}</button>`).join("")}</div></div>
+      ${stepper()}
+      ${stSeg([["todo", "받을 것"], ["got", "챙김"]])}
       ` : kind === "cand" ? `
       <div class="fld">종류<div class="seg" id="e-cat">
         ${CATS.map((c) => `<button class="${d.cat === c ? "on" : ""}" data-cat="${c}">${c}</button>`).join("")}</div></div>
-      <label class="fld">잡은 날<input id="e-sch" value="${esc(d.scheduled)}" placeholder="캘린더에 옮겼으면 날짜 (예: 12/20)"></label>
+      <label class="fld">일정 날짜<input id="e-sch" value="${esc(d.scheduled)}" placeholder="캘린더에 옮겼으면 날짜 (예: 12/20)"></label>
       ` : ""}
       ${ref ? `<label class="fld">주제<input id="e-place" value="${esc(d.topic)}" list="e-places" placeholder="비우면 주제 없음"><datalist id="e-places">${placesOf(kind).map((p) => `<option value="${esc(p)}">`).join("")}</datalist></label>`
+        : bring ? `<input type="hidden" id="e-place" value="${esc(d.place)}">`
         : `<label class="fld">${gift ? "사는 곳" : "장소"}<input id="e-place" value="${esc(d.place)}" list="e-places" placeholder="${HOME_PLACE[kind] || "비우면 미분류"}"><datalist id="e-places">${placesOf(kind).map((p) => `<option value="${esc(p)}">`).join("")}</datalist></label>`}
-      <label class="fld">메모<textarea id="e-note" placeholder="${gift ? "예: 빌라 매장, 공항 면세점" : "예: 텍스리펀, 코트용"}">${esc(d.note)}</textarea></label>
+      <label class="fld">메모<textarea id="e-note" placeholder="${gift ? "예: 빌라 매장, 공항 면세점" : bring ? "예: 작은 통 두 개로, 냉동" : "예: 텍스리펀, 코트용"}">${esc(d.note)}</textarea></label>
       <label class="fld">링크<input id="e-link" type="url" inputmode="url" value="${esc(d.link)}" placeholder="https://"></label>
       <div class="fld">옮기기<div class="seg">${Object.keys(KIND).filter((k) => k !== kind).map((k) => `<button class="press" data-move="${k}">${TO[k]}</button>`).join("")}</div></div>
       <div class="sh-actions">
@@ -474,6 +585,7 @@ function openEdit(it) {
         ...(ref ? { topic: d.topic?.trim() || null } : { place: d.place?.trim() || null }),
         ...(buy ? { cat: d.cat || null, qty: d.qty > 1 ? d.qty : null, status: d.status, ordered_by: d.ordered_by || null, ship_to: d.ship_to || null, eta: d.eta?.trim() || null }
           : gift ? { qty: d.qty > 1 ? d.qty : null, status: d.status, ordered_by: d.ordered_by || null, recipient: d.recipient?.trim() || null }
+          : bring ? { qty: d.qty > 1 ? d.qty : null, status: d.status, ship_to: d.ship_to || null }
           : ref ? {}
           : { cat: d.cat || null, scheduled: d.scheduled?.trim() || null }),
         ...(wasStruck !== nowStruck ? { done_by: nowStruck ? me.member_code : null, done_at: nowStruck ? new Date().toISOString() : null } : {}),
@@ -696,6 +808,31 @@ function closeSheet() {
   closeSheet.t = setTimeout(() => { sh.hidden = true; bk.hidden = true; sh.innerHTML = ""; }, 260);
 }
 $("sheet-back").addEventListener("click", () => { openTripId = null; closeSheet(); });
+
+// 손잡이(시트 맨 위 띠)를 끌어내려 닫기 — 120px 넘게 내리거나 빠르게 튕기면 닫히고, 아니면 제자리로
+(() => {
+  const sh = $("sheet");
+  let y0 = 0, t0 = 0, dy = 0, dragging = false;
+  sh.addEventListener("pointerdown", (e) => {
+    if (!e.target.closest(".grab")) return;
+    dragging = true; y0 = e.clientY; t0 = performance.now(); dy = 0;
+    sh.classList.add("dragging"); sh.setPointerCapture(e.pointerId);
+  });
+  sh.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    dy = e.clientY - y0;
+    // 위로 끌면 살짝만 따라옴(벽에 부딪히는 대신 저항)
+    sh.style.transform = `translateY(${dy > 0 ? dy : dy / 6}px)`;
+  });
+  const end = () => {
+    if (!dragging) return;
+    dragging = false; sh.classList.remove("dragging"); sh.style.transform = "";
+    const v = dy / Math.max(1, performance.now() - t0);
+    if (dy > 120 || (dy > 20 && v > 0.5)) { openTripId = null; closeSheet(); }
+  };
+  sh.addEventListener("pointerup", end);
+  sh.addEventListener("pointercancel", end);
+})();
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("sheet").hidden) { openTripId = null; closeSheet(); } });
 
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js");

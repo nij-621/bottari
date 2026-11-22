@@ -4,7 +4,7 @@
   --mk: #c2502e;   /* 민경 펜 (Pairfolio와 같은 뜻) */
   --km: #2b4fa1;   /* 규문 펜 */
   --ink: #262624;
-  --faint: #8f8d85;
+  --faint: #6e6c65;   /* 흰 바탕 대비 약 5.3:1 (예전 #8f8d85는 3.3:1이라 밖에서 안 보였음) */
   --rule: #eeece6;
   --paper: #ffffff;
   --wash: #f6f5f1;
@@ -23,12 +23,12 @@ svg.i { width: 1em; height: 1em; stroke: currentColor; fill: none; stroke-width:
 .press:active { transform: scale(.97); }
 [hidden] { display: none !important; }
 
-.pen-title { font-family: "Nanum Pen Script", cursive; font-weight: 400; line-height: 1; }
+.pen-title { font-family: "Poor Story", "Noto Sans KR", sans-serif; font-weight: 400; line-height: 1; }
 
 /* ── 로그인 ── */
 #screen-auth { min-height: 100%; display: grid; place-items: center; padding: 24px; }
 .auth-box { width: 100%; max-width: 320px; }
-.auth-box .pen-title { font-size: 4rem; }
+.auth-box .pen-title { font-size: 3.2rem; }
 .auth-sub { color: var(--faint); font-size: .85rem; margin: 6px 0 28px; }
 #login-form { display: grid; gap: 14px; }
 #login-form label { display: grid; gap: 6px; font-size: .78rem; color: var(--faint); }
@@ -42,15 +42,25 @@ svg.i { width: 1em; height: 1em; stroke: currentColor; fill: none; stroke-width:
 #app { height: 100%; display: flex; flex-direction: column; max-width: 560px; margin: 0 auto; }
 #scr { flex: 1; overflow-y: auto; padding: calc(env(safe-area-inset-top, 0px) + 22px) 20px 16px; -webkit-overflow-scrolling: touch; }
 .hd { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.hd .pen-title { font-size: 3.1rem; }
-.trip { font-size: .76rem; color: var(--faint); font-weight: 500; display: inline-flex; gap: 5px; align-items: center; padding: 6px 0 6px 8px; }
+.hd .pen-title { font-size: 2.5rem; }
+.trip { font-size: .78rem; color: var(--faint); font-weight: 500; display: inline-flex; gap: 5px; align-items: center; padding: 12px 4px 12px 8px; }
+.hd-r { display: inline-flex; align-items: center; gap: 2px; margin-right: -10px; }
+.icon-btn { width: 44px; height: 44px; display: grid; place-items: center; color: var(--ink); flex: none; }
+.icon-btn svg.i { width: 20px; height: 20px; }
+.search { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px; padding: 0 0 0 12px; border-radius: 12px; background: var(--wash); color: var(--faint); }
+.search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-size: 16px; padding: 11px 0; color: var(--ink); -webkit-appearance: none; }
+.search input::-webkit-search-cancel-button { display: none; }
+.hint { display: flex; align-items: center; gap: 4px; margin: 8px 0 0; padding: 0 0 0 12px; border-radius: 10px; background: var(--wash); font-size: .8rem; color: var(--ink); line-height: 1.5; }
+.hint span { flex: 1; padding: 9px 0; }
+.hint .icon-btn { width: 40px; height: 40px; color: var(--faint); }
+.hint .icon-btn svg.i { width: 16px; height: 16px; }
 .key { display: flex; gap: 14px; font-size: .7rem; color: var(--faint); margin: 4px 0 4px; }
 .key span { display: inline-flex; align-items: center; gap: 5px; }
 .key i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
 .key i.mk { background: var(--mk); } .key i.km { background: var(--km); }
 
 /* ── 목록 ── */
-.sec { font-family: "Nanum Pen Script", cursive; font-size: 1.5rem; color: var(--faint); margin: 20px 0 0; line-height: 1.2; display: flex; align-items: baseline; gap: 6px; }
+.sec { font-family: "Poor Story", "Noto Sans KR", sans-serif; font-size: 1.2rem; color: var(--faint); margin: 20px 0 0; line-height: 1.2; display: flex; align-items: baseline; gap: 6px; }
 .sec small { font-family: "Noto Sans KR", sans-serif; font-size: .68rem; }
 .it { display: flex; align-items: flex-start; gap: 8px; padding: 12px 0 11px; border-bottom: 1px solid var(--rule); cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
 .it .tx { flex: 1; min-width: 0; }
@@ -64,7 +74,7 @@ svg.i { width: 1em; height: 1em; stroke: currentColor; fill: none; stroke-width:
 .struck .nm { opacity: .5; }
 .strike path, .strike.by-MK path { stroke: var(--mk); }
 .strike.by-KM path { stroke: var(--km); }
-.mt { display: flex; flex-wrap: wrap; gap: 3px 10px; margin-top: 3px; font-size: .72rem; color: var(--faint); align-items: center; }
+.mt { display: flex; flex-wrap: wrap; gap: 3px 10px; margin-top: 3px; font-size: .78rem; color: var(--faint); align-items: center; }
 .mt > span, .mt > a { display: inline-flex; gap: 4px; align-items: center; }
 .mt a { color: var(--faint); text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 2px; max-width: 180px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .mt .tg { border: 1px solid var(--rule); border-radius: 99px; padding: 0 7px; }
@@ -72,9 +82,12 @@ svg.i { width: 1em; height: 1em; stroke: currentColor; fill: none; stroke-width:
 .summary { font-size: .74rem; color: var(--faint); margin: 10px 0 -6px; }
 .summary b { color: var(--ink); font-weight: 700; }
 .empty b { color: var(--ink); font-weight: 500; }
-.more { color: #c9c7bf; width: 32px; height: 28px; display: grid; place-items: center; flex: none; margin: -3px -8px 0 0; }
-.more svg.i { width: 18px; height: 18px; }
-.fold { width: 100%; font-family: "Nanum Pen Script", cursive; font-size: 1.4rem; color: var(--faint); padding: 14px 0 10px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--rule); }
+.empty.sm { font-size: .8rem; padding: 10px 0 4px; }
+/* ⋯ 고치기: 보이는 건 작게, 누르는 영역은 44×44 (행 높이는 안 늘어나게 음수 여백) */
+.more { color: #a3a199; width: 44px; height: 44px; display: grid; place-items: center; flex: none; margin: -11px -12px -11px 0; }
+.more svg.i { width: 20px; height: 20px; }
+.sec-add { margin-left: auto; font-family: "Noto Sans KR", sans-serif; font-size: .8rem; color: var(--ink); padding: 8px 2px 8px 12px; min-height: 40px; }
+.fold { width: 100%; font-family: "Poor Story", "Noto Sans KR", sans-serif; font-size: 1.12rem; color: var(--faint); padding: 14px 0 10px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--rule); }
 .fold svg.i { margin-left: auto; width: 18px; height: 18px; transition: transform 200ms var(--ease); }
 .fold.open svg.i { transform: rotate(180deg); }
 .empty { color: var(--faint); font-size: .86rem; line-height: 1.6; padding: 28px 0; }
@@ -99,8 +112,11 @@ svg.i { width: 1em; height: 1em; stroke: currentColor; fill: none; stroke-width:
 #sheet-back.in { opacity: 1; }
 #sheet { position: fixed; left: 0; right: 0; bottom: 0; max-width: 560px; margin: 0 auto; background: var(--paper); border-radius: 18px 18px 0 0; padding: 10px 20px calc(var(--safe-b) + 18px); z-index: 11; max-height: 88vh; overflow-y: auto; transform: translateY(100%); transition: transform 300ms var(--ease-drawer); box-shadow: 0 -8px 30px rgba(0,0,0,.08); }
 #sheet.in { transform: none; }
-.grab { width: 36px; height: 4px; border-radius: 2px; background: var(--rule); margin: 0 auto 14px; }
-.sh-title { font-family: "Nanum Pen Script", cursive; font-size: 1.9rem; margin-bottom: 8px; }
+/* 손잡이: 위쪽 띠를 끌어내리면 닫힘 (누르는 영역은 넉넉하게) */
+.grab { height: 26px; margin: -10px -20px 4px; display: grid; place-items: center; touch-action: none; cursor: grab; }
+.grab::before { content: ""; width: 40px; height: 5px; border-radius: 3px; background: #d9d7cf; }
+#sheet.dragging { transition: none; }
+.sh-title { font-family: "Poor Story", "Noto Sans KR", sans-serif; font-size: 1.55rem; margin-bottom: 8px; }
 .fld { display: grid; gap: 6px; margin-top: 14px; font-size: .74rem; color: var(--faint); }
 .fld input, .fld textarea { font-size: 16px; color: var(--ink); padding: 10px 12px; border: 1px solid var(--rule); border-radius: 10px; background: var(--wash); width: 100%; }
 .fld textarea { min-height: 64px; resize: vertical; }
@@ -124,8 +140,8 @@ svg.i { width: 1em; height: 1em; stroke: currentColor; fill: none; stroke-width:
 .trip-card { width: 100%; display: grid; gap: 3px; padding: 16px 0 14px; border-bottom: 1px solid var(--rule); text-align: left; }
 .trip-card.child { padding-left: 16px; border-left: 2px solid var(--rule); margin-left: 4px; width: calc(100% - 4px); }
 .tc-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.tc-name { font-family: "Nanum Pen Script", cursive; font-size: 1.9rem; line-height: 1.1; }
-.trip-card.child .tc-name { font-size: 1.55rem; }
+.tc-name { font-family: "Poor Story", "Noto Sans KR", sans-serif; font-size: 1.55rem; line-height: 1.1; }
+.trip-card.child .tc-name { font-size: 1.3rem; }
 .tc-when { font-size: .78rem; font-weight: 700; color: var(--ink); white-space: nowrap; }
 .tc-meta { font-size: .76rem; color: var(--faint); }
 .tc-bar { display: block; height: 3px; background: var(--rule); border-radius: 2px; margin: 6px 0 1px; overflow: hidden; }
@@ -150,8 +166,11 @@ svg.i { width: 1em; height: 1em; stroke: currentColor; fill: none; stroke-width:
 .ck-add button svg.i { width: 19px; height: 19px; }
 #ck-fill { margin-top: 8px; border: 1px dashed #cfcdc6; }
 
-#toast { position: fixed; left: 50%; bottom: calc(var(--safe-b) + 130px); transform: translate(-50%, 8px); background: var(--ink); color: #fff; font-size: .82rem; padding: 10px 16px; border-radius: 99px; opacity: 0; pointer-events: none; transition: opacity 180ms ease, transform 180ms var(--ease); z-index: 20; max-width: calc(100% - 40px); }
+#toast { position: fixed; left: 50%; bottom: calc(var(--safe-b) + 130px); transform: translate(-50%, 8px); background: var(--ink); color: #fff; font-size: .84rem; padding: 0 6px 0 16px; min-height: 42px; border-radius: 99px; opacity: 0; pointer-events: none; transition: opacity 180ms ease, transform 180ms var(--ease); z-index: 20; max-width: calc(100% - 40px); display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 #toast.on { opacity: 1; transform: translate(-50%, 0); }
+#toast.on.act { pointer-events: auto; }
+#toast span { padding: 11px 10px 11px 0; }
+#toast-act { color: #fff; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; padding: 11px 12px; }
 
 @media (prefers-reduced-motion: reduce) {
   .press:active { transform: none; }
