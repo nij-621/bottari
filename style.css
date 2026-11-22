@@ -178,7 +178,7 @@ svg.i { width: 1em; height: 1em; stroke: currentColor; fill: none; stroke-width:
 }
 
 /* ── 꾹 눌러 끌기 ── */
-.it { -webkit-touch-callout: none; }
+.it { -webkit-touch-callout: none; -webkit-user-drag: none; }
 .it.ghost { opacity: .25; }
 .drag-clone { position: fixed; z-index: 30; margin: 0; padding: 12px 12px 11px; background: var(--paper); border-radius: 12px; border: 0;
   box-shadow: 0 12px 32px rgba(20, 20, 18, .18), 0 2px 6px rgba(20, 20, 18, .08); pointer-events: none; transform: scale(1.03); transform-origin: 50% 50%;

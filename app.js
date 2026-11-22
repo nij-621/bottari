@@ -3,7 +3,7 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm";
 import { SUPABASE_URL, SUPABASE_KEY } from "./config.js";
 
-const VERSION = "1.8";
+const VERSION = "1.9";
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const NAME = { MK: "민경", KM: "규문" };
@@ -382,18 +382,27 @@ $("list").addEventListener("pointerdown", (e) => {
   if (e.pointerType === "mouse" && e.button !== 0) return;
   const row = e.target.closest(".it");
   if (!row || e.target.closest(".more, a") || !gOf(row) || state.q.trim()) return;
-  press = { id: row.dataset.id, x: e.clientX, y: e.clientY, timer: setTimeout(startDrag, LONG_PRESS) };
+  press = { id: row.dataset.id, x: e.clientX, y: e.clientY, touch: e.pointerType !== "mouse", timer: setTimeout(startDrag, LONG_PRESS) };
 });
 $("list").addEventListener("contextmenu", (e) => { if (press || drag) e.preventDefault(); }); // 길게 누르기 메뉴 막기
-document.addEventListener("pointermove", (e) => {
-  if (drag) { drag.y = e.clientY; drag.x = e.clientX; return moveDrag(); }
-  if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 8) cancelPress();
-  else if (press) { press.x = e.clientX; press.y = e.clientY; }
-});
-document.addEventListener("pointerup", () => { if (drag) endDrag(true); else cancelPress(); });
-document.addEventListener("pointercancel", () => { if (drag) endDrag(false); else cancelPress(); });
-// 끄는 동안엔 화면이 따라 스크롤되지 않게 (iOS는 passive: false여야 막힘)
-document.addEventListener("touchmove", (e) => { if (drag) e.preventDefault(); }, { passive: false });
+const follow = (x, y) => {
+  if (drag) { drag.x = x; drag.y = y; return moveDrag(); }
+  if (press && Math.hypot(x - press.x, y - press.y) > 8) cancelPress();
+  else if (press) { press.x = x; press.y = y; }
+};
+// 마우스(PC)는 포인터 신호로
+document.addEventListener("pointermove", (e) => { if (e.pointerType === "mouse") follow(e.clientX, e.clientY); });
+document.addEventListener("pointerup", (e) => { if (e.pointerType !== "mouse") return; if (drag) endDrag(true); else cancelPress(); });
+// 손가락(아이폰)은 터치 신호로 — iOS는 끄는 중 포인터 신호를 중간에 끊어(pointercancel) 버리는 일이 있어서 터치 신호가 더 믿을 만함.
+// 끄는 동안엔 화면이 따라 스크롤되지 않게 막음 (iOS는 passive: false여야 막힘)
+document.addEventListener("touchmove", (e) => {
+  const t = e.touches[0]; if (!t) return;
+  if (drag) e.preventDefault();
+  follow(t.clientX, t.clientY);
+}, { passive: false });
+document.addEventListener("touchend", () => { if (drag) endDrag(true); else cancelPress(); });
+document.addEventListener("touchcancel", () => { if (drag) endDrag(false); else cancelPress(); });
+document.addEventListener("pointercancel", (e) => { if (e.pointerType === "mouse") { if (drag) endDrag(false); else cancelPress(); } else if (!drag) cancelPress(); });
 document.addEventListener("keydown", (e) => { if (drag && e.key === "Escape") endDrag(false); });
 function cancelPress() { if (press) { clearTimeout(press.timer); press = null; } }
 // 받침 따라 "로/으로" (받침 없음·ㄹ받침 → 로): 서울로, 식품으로, 엄마로
@@ -411,9 +420,12 @@ function startDrag() {
   const r = old.getBoundingClientRect();
   drag = { it, src: gOf(old), x: press.x, y: press.y, offY: press.y - r.top, target: null };
   press = null;
-  state.dragId = it.id; render(); // 들린 자리는 흐리게, 살 것은 빈 분류도 놓을 자리로 보임
-  const row = $("list").querySelector(`.it[data-id="${it.id}"]`);
-  const clone = row.cloneNode(true);
+  const clone = old.cloneNode(true);
+  state.dragId = it.id; render(); // 살 것은 빈 분류도 놓을 자리로 보임
+  // 손가락 아래 있던 원래 항목을 새로 그린 자리에 다시 끼워 넣음 — 이걸 버리면 아이폰은 이후 터치 신호를
+  // 문서에서 떨어져 나간 옛 항목에만 보내서 끌기가 따라오지 않음 (v1.8에서 실제로 겪은 문제)
+  $("list").querySelector(`.it[data-id="${it.id}"]`)?.replaceWith(old);
+  old.classList.add("ghost");
   clone.classList.remove("ghost"); clone.classList.add("drag-clone");
   clone.style.left = r.left + "px"; clone.style.width = r.width + "px";
   document.body.append(clone);
@@ -453,6 +465,7 @@ function moveDrag() {
   drag.target = { g, ids: rows.map((rw) => rw.dataset.id), idx };
 }
 async function endDrag(commit) {
+  if (!drag) return; // 터치·포인터 신호가 둘 다 올 수 있어서 한 번만 끝냄
   const d = drag; drag = null; dragEndedAt = performance.now();
   d.clone.remove(); d.line.remove();
   document.body.classList.remove("dragging");
