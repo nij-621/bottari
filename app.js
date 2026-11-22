@@ -3,7 +3,7 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm";
 import { SUPABASE_URL, SUPABASE_KEY } from "./config.js";
 
-const VERSION = "1.9";
+const VERSION = "2.0";
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const NAME = { MK: "민경", KM: "규문" };
@@ -542,6 +542,65 @@ function goTab(t) {
   render();
 }
 $("hint-x").addEventListener("click", () => { state.hintsSeen[state.tab] = true; save("bt.hints2", state.hintsSeen); render(); });
+
+// ───────────────────────────── 옆으로 쓸어 탭 넘기기 (살 것 ↔ 후보 ↔ 선물 ↔ 참고 ↔ 여행)
+// 옆으로 확실히(세로보다 1.4배 넘게) 움직일 때만. 위아래 스크롤·꾹 눌러 끌기·시트·찾기 중엔 안 함.
+// 화면 가장자리 24px에서 시작한 쓸기는 사파리 "뒤로 가기" 몫이라 무시
+const TAB_ORDER = ["buy", "cand", "gift", "ref", "trip"];
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+let sw = null;
+function swipeReset(animate) {
+  const l = $("list");
+  l.style.transition = animate && !reduceMotion.matches ? "transform 200ms var(--ease), opacity 200ms ease" : "none";
+  l.style.transform = ""; l.style.opacity = "";
+}
+$("scr").addEventListener("touchstart", (e) => {
+  sw = null;
+  if (e.touches.length !== 1 || !$("sheet").hidden || state.q.trim()) return;
+  const t = e.touches[0];
+  if (t.clientX < 24 || t.clientX > innerWidth - 24) return;
+  sw = { x: t.clientX, y: t.clientY, t: performance.now(), dir: null, dx: 0 };
+}, { passive: true });
+$("scr").addEventListener("touchmove", (e) => {
+  if (!sw) return;
+  if (drag) { sw = null; return swipeReset(false); }
+  const t = e.touches[0], dx = t.clientX - sw.x, dy = t.clientY - sw.y;
+  if (!sw.dir) {
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+    sw.dir = Math.abs(dx) > Math.abs(dy) * 1.4 ? "h" : "v";
+    if (sw.dir === "h") cancelPress(); // 옆으로 쓰는 중엔 꾹 누르기로 안 봄
+  }
+  if (sw.dir !== "h") return;
+  e.preventDefault(); // 쓰는 동안 위아래로 흔들리지 않게
+  const i = TAB_ORDER.indexOf(state.tab);
+  sw.edge = (dx > 0 && i === 0) || (dx < 0 && i === TAB_ORDER.length - 1);
+  sw.dx = dx;
+  const l = $("list");
+  l.style.transition = "none";
+  l.style.transform = `translateX(${sw.edge ? dx / 5 : dx * 0.5}px)`; // 맨 끝 탭에선 살짝만 끌려옴
+  l.style.opacity = String(1 - Math.min(Math.abs(dx) / 600, 0.35));
+}, { passive: false });
+$("scr").addEventListener("touchend", () => {
+  const s = sw; sw = null;
+  if (!s || s.dir !== "h") return;
+  const v = Math.abs(s.dx) / Math.max(1, performance.now() - s.t);
+  const go = !s.edge && (Math.abs(s.dx) > 70 || (Math.abs(s.dx) > 30 && v > 0.4));
+  if (!go) return swipeReset(true);
+  const dir = s.dx < 0 ? 1 : -1; // 왼쪽으로 쓸면 다음 탭
+  const next = TAB_ORDER[TAB_ORDER.indexOf(state.tab) + dir];
+  dragEndedAt = performance.now(); // 손을 뗀 자리의 항목이 "누르기"로 읽히지 않게
+  const l = $("list");
+  if (reduceMotion.matches) { goTab(next); return swipeReset(false); }
+  l.style.transition = "transform 140ms ease-in, opacity 140ms ease-in";
+  l.style.transform = `translateX(${-dir * 40}%)`; l.style.opacity = "0";
+  setTimeout(() => {
+    goTab(next);
+    l.style.transition = "none";
+    l.style.transform = `translateX(${dir * 30}%)`; l.style.opacity = "0";
+    requestAnimationFrame(() => requestAnimationFrame(() => swipeReset(true)));
+  }, 140);
+});
+$("scr").addEventListener("touchcancel", () => { if (sw?.dir === "h") swipeReset(true); sw = null; });
 $("trip-btn").addEventListener("click", () => goTab("trip"));
 document.querySelector(".tabs").addEventListener("click", (e) => {
   const b = e.target.closest("[data-tab]"); if (b) goTab(b.dataset.tab);
