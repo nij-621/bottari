@@ -3,21 +3,31 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm";
 import { SUPABASE_URL, SUPABASE_KEY } from "./config.js";
 
-const VERSION = "1.2";
+const VERSION = "1.4";
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const NAME = { MK: "민경", KM: "규문" };
 const HOME = { MK: "민경네", KM: "규문네" };
-const CATS = ["할 것", "먹을 것", "예약", "사람", "해지", "부모님"];
+const CATS = ["할 것", "먹을 것", "예약", "사람", "해지", "부모님"];         // 후보 종류
+const BUY_CATS = ["식품", "뷰티", "옷·신발", "생활", "기타"];                    // 살 것 분류
+const NOCAT = "분류 안 함";
 const NOPLACE = "미분류";
 const ANYONE = "나눠 줄 것";   // 선물: 받는 사람을 안 정한 것 (친구·지인용 과자 등)
 const KIND = { buy: "살 것", cand: "후보", gift: "선물" };
 const TO = { buy: "살 것으로", cand: "후보로", gift: "선물로" };
 const HOME_PLACE = { buy: "한국", cand: null, gift: "오스트리아" }; // 장소 기본값 (이 값이면 태그 안 보임)
+// 새 여행의 준비 체크리스트 — 같은 장소의 지난 여행이 있으면 그걸 복사하고, 없으면 이 목록
+const TEMPLATE = {
+  "한국": ["항공권", "공항 가는 길", "한국 유심·로밍", "원화 현금", "선물 다 샀나", "집 비우기 (우편·화분·난방)", "짐 무게 확인 (갈 때·올 때)"],
+  "일본": ["항공권", "숙소", "엔화 환전", "비짓재팬 웹 등록", "포켓와이파이·eSIM", "여행자 보험", "공항 ↔ 시내 교통"],
+  "": ["항공권", "숙소", "환전", "유심·eSIM", "여행자 보험", "공항 ↔ 시내 교통"],
+};
 
 let me = null;            // household_members 행
 let items = [];           // 지워지지 않은 bt_items
-let trip = null;          // { name, date }
+let trips = [];           // bt_trips (지워지지 않은 것)
+let checks = [];          // bt_checks (지워지지 않은 것)
+let trip = null;          // 예전 "다음 출발" 설정 — 여행이 하나도 없을 때만 머리말에 씀
 const recent = new Set(); // 이번에 그은 항목 — 다시 그릴 때도 제자리에 두어 실수로 그은 걸 바로 되돌릴 수 있게
 const prevSt = new Map(); // 선물: 이번에 한 단계 넘긴 항목의 이전 상태 — 다시 누르면 되돌림
 const state = {
@@ -44,15 +54,17 @@ const DEMO_ITEMS = () => {
   const b = (text, o = {}) => ({ id: uuid(), kind: "buy", text, place: "한국", status: "todo", created_by: "MK", created_at: t(90), ...o });
   const c = (text, o = {}) => ({ id: uuid(), kind: "cand", text, status: "todo", created_by: "MK", created_at: t(90), ...o });
   return [
-    b("메디큐브 에이지알 부스터프로", { qty: 2, status: "ord", ordered_by: "MK", ship_to: "MK", eta: "12/12" }),
-    b("오르조 보리차", { status: "ord", ordered_by: "KM", ship_to: "KM", created_by: "KM" }),
-    b("킬리안 플라워 오브 이모탈리티", { note: "텍스리펀" }),
-    b("포켓와이파이", { note: "한국·일본" }),
-    b("사골곰탕", { note: "꼭 고기 사진이 있어야 함, 식육" }),
-    b("딸기 크림치즈", { qty: 2 }),
-    b("샴푸", { created_by: "KM" }),
-    b("후쿠오카 곤약젤리", { place: "일본" }),
-    b("생리대", { status: "got", done_by: "KM" }),
+    b("메디큐브 에이지알 부스터프로", { cat: "뷰티", qty: 2, status: "ord", ordered_by: "MK", ship_to: "MK", eta: "12/12" }),
+    b("오르조 보리차", { cat: "식품", status: "ord", ordered_by: "KM", ship_to: "KM", created_by: "KM" }),
+    b("킬리안 플라워 오브 이모탈리티", { cat: "뷰티", note: "텍스리펀" }),
+    b("포켓와이파이", { cat: "기타", note: "한국·일본" }),
+    b("사골곰탕", { cat: "식품", note: "꼭 고기 사진이 있어야 함, 식육" }),
+    b("딸기 크림치즈", { cat: "식품", qty: 2 }),
+    b("샴푸", { cat: "뷰티", created_by: "KM" }),
+    b("슬링백, 힐", { cat: "옷·신발" }),
+    b("라면기 그릇", { created_by: "KM" }),
+    b("후쿠오카 곤약젤리", { place: "일본", cat: "식품" }),
+    b("생리대", { cat: "생활", status: "got", done_by: "KM" }),
     c("국립중앙박물관", { place: "서울", cat: "할 것" }),
     c("잠실 피부과?", { place: "서울", cat: "예약" }),
     c("카리나 눈썹문신", { cat: "예약", status: "done", done_by: "MK", scheduled: "12/20" }),
@@ -64,6 +76,12 @@ const DEMO_ITEMS = () => {
       .map(([r, text, o]) => ({ id: uuid(), kind: "gift", recipient: r, text, place: "오스트리아", status: "todo", created_by: "MK", created_at: t(80), ...o })),
   ];
 };
+const DEMO_TRIPS = () => {
+  const kr = { id: uuid(), name: "겨울 한국", place: "한국", start_date: "2026-12-18", end_date: "2027-01-06", people: ["MK", "KM"], parent_id: null, created_by: "MK", created_at: new Date().toISOString() };
+  const jp = { id: uuid(), name: "일본", place: "일본", start_date: "2026-12-21", end_date: "2026-12-23", people: [], parent_id: kr.id, created_by: "MK", created_at: new Date().toISOString() };
+  const ck = (t, list, done = []) => list.map((text, i) => ({ id: uuid(), trip_id: t.id, text, sort: i + 1, done: done.includes(i), done_by: done.includes(i) ? "KM" : null, created_by: "MK", created_at: new Date().toISOString() }));
+  return { trips: [kr, jp], checks: [...ck(kr, TEMPLATE["한국"], [0]), ...ck(jp, TEMPLATE["일본"])] };
+};
 if (DEMO) {
   const ok = { error: null, data: null };
   const q = { update: () => q, insert: async () => ok, upsert: async () => ok, eq: async () => ok };
@@ -74,7 +92,7 @@ if (DEMO) {
 async function boot() {
   if (DEMO) {
     me = { member_code: "MK", display_name: "민경" };
-    items = DEMO_ITEMS(); trip = { name: "12월 한국", date: "2026-12-18" };
+    items = DEMO_ITEMS(); ({ trips, checks } = DEMO_TRIPS());
     $("screen-auth").hidden = true; $("app").hidden = false;
     $("pen-dot").className = "pen-dot MK";
     return render();
@@ -110,28 +128,37 @@ async function enter(session) {
 
 // ───────────────────────────── 데이터
 async function refresh() {
-  const [r1, r2] = await Promise.all([
+  const [r1, r2, r3, r4] = await Promise.all([
     sb.from("bt_items").select("*").is("deleted_at", null).order("created_at"),
     sb.from("bt_settings").select("*").eq("key", "trip").maybeSingle(),
+    sb.from("bt_trips").select("*").is("deleted_at", null).order("start_date"),
+    sb.from("bt_checks").select("*").is("deleted_at", null).order("sort").order("created_at"),
   ]);
   if (r1.error) {
     toast(r1.error.code === "42P01" ? "표가 아직 없어요. migrations/001_bottari.sql을 실행해 주세요." : "불러오지 못했어요: " + r1.error.message);
     items = [];
   } else items = r1.data;
   trip = r2.data?.value ?? null;
+  trips = r3.error ? [] : r3.data;   // 004_trips.sql 실행 전이면 빈 채로
+  checks = r4.error ? [] : r4.data;
   render();
 }
+// 실시간: 표마다 받은 행을 해당 배열에 반영
+const LIVE = { bt_items: () => items, bt_trips: () => trips, bt_checks: () => checks };
+function applyLive(table, { eventType, new: row, old }) {
+  const arr = LIVE[table]();
+  const id = row?.id ?? old?.id;
+  const i = arr.findIndex((x) => x.id === id);
+  if (eventType === "DELETE" || row?.deleted_at) { if (i >= 0) arr.splice(i, 1); }
+  else if (i >= 0) arr[i] = row;
+  else arr.push(row);
+  render();
+  if (openTripId && table !== "bt_items") openTrip(openTripId, true);
+}
 function subscribe() {
-  sb.channel("bt-items")
-    .on("postgres_changes", { event: "*", schema: "public", table: "bt_items" }, ({ eventType, new: row, old }) => {
-      const id = row?.id ?? old?.id;
-      const i = items.findIndex((x) => x.id === id);
-      if (eventType === "DELETE" || row?.deleted_at) { if (i >= 0) items.splice(i, 1); }
-      else if (i >= 0) items[i] = row;
-      else items.push(row);
-      render();
-    })
-    .subscribe();
+  let ch = sb.channel("bt-live");
+  for (const table of Object.keys(LIVE)) ch = ch.on("postgres_changes", { event: "*", schema: "public", table }, (p) => applyLive(table, p));
+  ch.subscribe();
   // 화면으로 돌아오면 한 번 더 맞춤 (실시간 연결이 끊겼을 때 대비)
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
 }
@@ -157,7 +184,8 @@ function itemHtml(it) {
       const who = it.ordered_by ? NAME[it.ordered_by] + " 주문" : "주문함";
       meta.push(`<span>${I("package")}${esc([who, it.ship_to ? HOME[it.ship_to] + "로" : "", it.eta].filter(Boolean).join(" · "))}</span>`);
     }
-    if (it.place && it.place !== "한국") meta.push(`<span class="tg">${esc(it.place)}</span>`);
+    // 살 것 목록은 분류·장소로 묶이니, 묶이지 않는 주문함·받음에서만 장소를 붙임
+    if (it.status !== "todo" && it.place && it.place !== "한국") meta.push(`<span class="tg">${esc(it.place)}</span>`);
   } else if (it.kind === "gift") {
     if (it.status === "got" || it.status === "done") meta.push(`<span class="bought">${I("check")}${it.ordered_by ? NAME[it.ordered_by] + "이 삼" : "샀음"}</span>`);
     if (it.place && it.place !== HOME_PLACE.gift) meta.push(`<span class="tg">${esc(it.place)}</span>`);
@@ -179,9 +207,12 @@ const fold = (key, label, list) => !list.length ? "" :
 function render() {
   if (!me) return;
   const tab = state.tab;
-  $("title").textContent = KIND[tab];
+  $("title").textContent = tab === "trip" ? "여행" : KIND[tab];
   document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
   $("trip-btn").innerHTML = tripLabel();
+  $("add").hidden = tab === "trip";
+  document.querySelector(".key").hidden = tab === "trip";
+  if (tab === "trip") { $("list").innerHTML = tripsHtml(); return; }
   const place = state.place[tab];
   $("add-place").innerHTML = `${I("pin")}${esc(place || NOPLACE)}`;
   $("add-text").placeholder = { buy: "살 것 한 줄", cand: "하고 싶은 것 한 줄", gift: "엄마: 마너 초콜릿" }[tab];
@@ -193,7 +224,13 @@ function render() {
     const ord = mine.filter((x) => x.status === "ord" || (recent.has(x.id) && x.status === "got" && x.ship_to));
     const todo = mine.filter((x) => keep(x) && !ord.includes(x));
     const got = mine.filter((x) => x.status === "got" && !recent.has(x.id));
-    html = sec("주문함", ord) + sec("살 것", todo) + fold("got", "받음", got);
+    // 한국에서 살 것은 분류별(식품·뷰티·…, 분류 안 한 건 맨 아래), 다른 곳(일본 등)은 장소별로 따로 — 목록이 섞이지 않게
+    const here = todo.filter((x) => !x.place || x.place === "한국");
+    const cats = [...BUY_CATS, NOCAT].map((c) => [c, here.filter((x) => (BUY_CATS.includes(x.cat) ? x.cat : NOCAT) === c)]);
+    const away = new Map();
+    for (const x of todo) if (x.place && x.place !== "한국") { if (!away.has(x.place)) away.set(x.place, []); away.get(x.place).push(x); }
+    html = sec("주문함", ord) + cats.map(([c, l]) => sec(c, l)).join("")
+      + [...away].map(([p, l]) => sec(`${esc(p)}에서`, l)).join("") + fold("got", "받음", got);
     if (!mine.length) html = `<p class="empty">살 게 생기면 아래에 한 줄 적어요. 상대 화면에도 바로 떠요.</p>`;
   } else if (tab === "gift") {
     // 받는 사람별로 묶음(처음 적은 순서), 받는 사람 없는 건 맨 아래 "나눠 줄 것"
@@ -217,16 +254,32 @@ function render() {
   }
   $("list").innerHTML = html;
 }
+// ───────────────────────────── 날짜
+const today = () => new Date(new Date().toDateString());
+const day = (s) => new Date(s + "T00:00:00");
+const dayDiff = (a, b) => Math.round((a - b) / 864e5);
+const md = (s) => { const d = day(s); return `${d.getMonth() + 1}.${d.getDate()}`; };
+const span = (t) => `${md(t.start_date)} – ${md(t.end_date)} · ${dayDiff(day(t.end_date), day(t.start_date)) + 1}일`;
+
+// 머리말: 지금 하고 있는 큰 여행(N일째) → 다음 큰 여행(D-n) → 예전 "다음 출발" 설정
 function tripLabel() {
-  if (!trip?.date) return `${I("plane")}다음 출발 정하기`;
-  const d = Math.ceil((new Date(trip.date + "T00:00:00") - new Date(new Date().toDateString())) / 864e5);
-  const dd = d > 0 ? `D-${d}` : d === 0 ? "오늘 출발" : "다녀옴";
-  return `${esc(trip.name || "다음 출발")} · ${dd}`;
+  const top = trips.filter((t) => !t.parent_id).sort((a, b) => a.start_date.localeCompare(b.start_date));
+  const now = today();
+  const cur = top.find((t) => day(t.start_date) <= now && now <= day(t.end_date));
+  if (cur) return `${esc(cur.name)} · ${dayDiff(now, day(cur.start_date)) + 1}일째`;
+  const next = top.find((t) => day(t.start_date) > now);
+  if (next) return `${esc(next.name)} · D-${dayDiff(day(next.start_date), now)}`;
+  if (trip?.date && day(trip.date) >= now) return `${esc(trip.name || "다음 출발")} · D-${dayDiff(day(trip.date), now)}`;
+  return `${I("plane")}여행 정하기`;
 }
 
 // ───────────────────────────── 누르기: 긋기 / 고치기 / 접기
 $("list").addEventListener("click", (e) => {
   if (e.target.closest("a")) return;
+  const tc = e.target.closest("[data-trip]");
+  if (tc) return openTrip(tc.dataset.trip);
+  if (e.target.closest("#trip-new")) return openTripForm(null);
+  if (e.target.closest("#logout")) return sb.auth.signOut().then(() => location.reload());
   const ed = e.target.closest("[data-edit]");
   if (ed) return openEdit(items.find((x) => x.id === ed.dataset.edit));
   const f = e.target.closest("[data-fold]");
@@ -271,11 +324,10 @@ async function giftStep(it, row) {
   patch(it, fields);
 }
 
-$("trip-btn").addEventListener("click", openMenu);
+function goTab(t) { state.tab = t; save("bt.tab", t); recent.clear(); prevSt.clear(); $("scr").scrollTop = 0; render(); }
+$("trip-btn").addEventListener("click", () => goTab("trip"));
 document.querySelector(".tabs").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-tab]"); if (!b) return;
-  state.tab = b.dataset.tab; save("bt.tab", state.tab); recent.clear(); prevSt.clear();
-  $("scr").scrollTop = 0; render();
+  const b = e.target.closest("[data-tab]"); if (b) goTab(b.dataset.tab);
 });
 
 // ───────────────────────────── 적기
@@ -336,6 +388,8 @@ function openEdit(it) {
       ${gift ? `<label class="fld">받는 사람<input id="e-rcp" value="${esc(d.recipient)}" list="e-rcps" placeholder="비우면 나눠 줄 것"><datalist id="e-rcps">${recipients().map((r) => `<option value="${esc(r)}">`).join("")}</datalist></label>` : ""}
       <label class="fld">${gift ? "선물" : "이름"}<input class="big" id="e-text" value="${esc(d.text)}"></label>
       ${buy ? `
+      <div class="fld">분류<div class="seg" id="e-cat">
+        ${BUY_CATS.map((c) => `<button class="${d.cat === c ? "on" : ""}" data-cat="${c}">${c}</button>`).join("")}</div></div>
       ${stepper()}
       ${stSeg([["todo", "살 것"], ["ord", "주문함"], ["got", "받음"]])}
       ${d.status === "ord" || d.ship_to ? `
@@ -387,7 +441,7 @@ function openEdit(it) {
       const wasStruck = isStruck(it), nowStruck = isStruck({ ...it, status: d.status });
       const fields = {
         text, note: d.note.trim() || null, link: d.link.trim() || null, place: d.place.trim() || null,
-        ...(buy ? { qty: d.qty > 1 ? d.qty : null, status: d.status, ordered_by: d.ordered_by || null, ship_to: d.ship_to || null, eta: d.eta?.trim() || null }
+        ...(buy ? { cat: d.cat || null, qty: d.qty > 1 ? d.qty : null, status: d.status, ordered_by: d.ordered_by || null, ship_to: d.ship_to || null, eta: d.eta?.trim() || null }
           : gift ? { qty: d.qty > 1 ? d.qty : null, status: d.status, ordered_by: d.ordered_by || null, recipient: d.recipient?.trim() || null }
           : { cat: d.cat || null, scheduled: d.scheduled?.trim() || null }),
         ...(wasStruck !== nowStruck ? { done_by: nowStruck ? me.member_code : null, done_at: nowStruck ? new Date().toISOString() : null } : {}),
@@ -398,7 +452,8 @@ function openEdit(it) {
     sh.querySelectorAll("[data-move]").forEach((b) => b.addEventListener("click", async () => {
       closeSheet();
       const to = b.dataset.move;
-      if (await patch(it, { kind: to, status: "todo", ordered_by: null, ship_to: null, eta: null, done_by: null, done_at: null, place: HOME_PLACE[to] }))
+      // 분류 목록이 탭마다 달라서(후보 종류 ≠ 살 것 분류) 옮길 때 비움
+      if (await patch(it, { kind: to, status: "todo", cat: null, ordered_by: null, ship_to: null, eta: null, done_by: null, done_at: null, place: HOME_PLACE[to] }))
         toast(`${TO[to]} 옮겼어요.`);
     }));
     const del = $("e-del");
@@ -413,23 +468,184 @@ function openEdit(it) {
   draw();
 }
 
-// ───────────────────────────── 메뉴: 다음 출발 · 로그아웃
-function openMenu() {
-  openSheet(`<div class="sh-title">다음 출발</div>
-    <div class="row2">
-      <label class="fld">이름<input id="t-name" value="${esc(trip?.name)}" placeholder="12월 한국"></label>
-      <label class="fld">출발일<input id="t-date" type="date" value="${esc(trip?.date)}"></label>
-    </div>
-    <div class="sh-actions"><button class="btn-ghost press" id="logout">로그아웃</button><button class="btn-primary press" id="t-save">저장</button></div>
-    <p class="sh-meta">${NAME[me.member_code]}으로 로그인 · Bottari v${VERSION}</p>`);
-  $("t-save").addEventListener("click", async () => {
-    const value = { name: $("t-name").value.trim() || "다음 출발", date: $("t-date").value || null };
-    closeSheet();
-    const { error } = await sb.from("bt_settings").upsert({ key: "trip", value });
-    if (error) return toast("저장하지 못했어요: " + error.message);
-    trip = value; render(); toast("저장했어요.");
+// ───────────────────────────── 여행 탭: 여행 목록 → 여행 시트(사람 · 준비 체크리스트 · 이 장소 항목)
+const peopleHtml = (ppl) => ppl?.length
+  ? ppl.map((p) => NAME[p] ? `<span class="pp ${p}">${NAME[p]}</span>` : `<span class="pp">${esc(p)}</span>`).join(" · ")
+  : `<span class="pp none">같이 갈 사람 정하기</span>`;
+const checksOf = (id) => checks.filter((c) => c.trip_id === id).sort((a, b) => a.sort - b.sort || a.created_at.localeCompare(b.created_at));
+// 여행 장소와 같은 장소로 적은 살 것·후보 (한국 여행이면 장소 없는 후보도 포함)
+function linked(t) {
+  const same = (x) => x.place === t.place || (t.place === "한국" && x.kind === "cand" && !x.place);
+  return {
+    buy: items.filter((x) => x.kind === "buy" && x.status !== "got" && same(x)).length,
+    cand: items.filter((x) => x.kind === "cand" && x.status !== "done" && same(x)).length,
+  };
+}
+function tripCard(t, child) {
+  const cs = checksOf(t.id), done = cs.filter((c) => c.done).length;
+  const now = today(), s = day(t.start_date), e = day(t.end_date);
+  const when = now < s ? `D-${dayDiff(s, now)}` : now <= e ? `${dayDiff(now, s) + 1}일째` : "다녀옴";
+  return `<button class="trip-card press${child ? " child" : ""}" data-trip="${t.id}">
+    <span class="tc-top"><span class="tc-name">${esc(t.name)}</span><span class="tc-when">${when}</span></span>
+    <span class="tc-meta">${span(t)}${t.place ? ` · ${esc(t.place)}` : ""}</span>
+    <span class="tc-meta">${peopleHtml(t.people)}</span>
+    ${cs.length ? `<span class="tc-bar"><i style="width:${Math.round((done / cs.length) * 100)}%"></i></span><span class="tc-meta">준비 ${done}/${cs.length}</span>` : ""}
+  </button>`;
+}
+function tripsHtml() {
+  const now = today();
+  const top = trips.filter((t) => !t.parent_id).sort((a, b) => a.start_date.localeCompare(b.start_date));
+  const kids = (p) => trips.filter((t) => t.parent_id === p.id).sort((a, b) => a.start_date.localeCompare(b.start_date));
+  const block = (t) => tripCard(t, false) + kids(t).map((k) => tripCard(k, true)).join("");
+  const live = top.filter((t) => day(t.end_date) >= now), past = top.filter((t) => day(t.end_date) < now).reverse();
+  return (trips.length ? live.map(block).join("") : `<p class="empty">여행을 만들면 날짜·같이 가는 사람·준비 체크리스트를 한곳에서 봐요. 한국 휴가 안의 일본 여행처럼 큰 여행 안에 넣을 수도 있어요.</p>`)
+    + `<button class="trip-add press" id="trip-new">${I("plane")}새 여행</button>`
+    + (past.length ? `<div class="sec">지난 여행 <small>${past.length}</small></div>${past.map(block).join("")}` : "")
+    + `<p class="sh-meta foot">${NAME[me.member_code]}으로 로그인 · Bottari v${VERSION} · <button class="linkish" id="logout">로그아웃</button></p>`;
+}
+
+let openTripId = null;
+function openTrip(id, refreshOnly = false) {
+  const t = trips.find((x) => x.id === id);
+  if (!t) { if (openTripId === id) { openTripId = null; closeSheet(); } return; }
+  if (refreshOnly && openTripId !== id) return;
+  openTripId = id;
+  const typed = $("ck-new")?.value || "";
+  const cs = checksOf(id), parent = trips.find((x) => x.id === t.parent_id), n = linked(t);
+  const others = (t.people || []).filter((p) => !NAME[p]);
+  openSheet(`<div class="sh-title">${esc(t.name)}</div>
+    <p class="trip-sub">${span(t)}${t.place ? ` · ${esc(t.place)}` : ""}${parent ? ` · ${esc(parent.name)} 안` : ""}</p>
+    ${t.note ? `<p class="trip-note">${esc(t.note)}</p>` : ""}
+    <div class="fld">같이 가는 사람<div class="seg" id="t-ppl">
+      ${["MK", "KM"].map((c) => `<button class="${c}${t.people?.includes(c) ? " on" : ""}" data-pp="${c}">${NAME[c]}</button>`).join("")}
+      ${others.map((p) => `<button class="on" data-pp="${esc(p)}" aria-label="${esc(p)} 빼기">${esc(p)} ×</button>`).join("")}
+      <button data-pp-add>+ 다른 사람</button></div></div>
+    <div class="fld"><span>준비 <span class="ck-count">${cs.filter((c) => c.done).length}/${cs.length}</span></span></div>
+    <div class="ck-list">${cs.map((c) => `<div class="ck-row${c.done ? " struck" : ""}" data-ck="${c.id}" role="button" tabindex="0">
+        <span class="nm">${esc(c.text)}${strikeSvg(c.done_by)}</span>
+        <button class="ck-x" data-ck-del="${c.id}" aria-label="빼기">${I("x")}</button></div>`).join("")}</div>
+    ${cs.length ? "" : `<button class="btn-ghost press" id="ck-fill">${prevTripWithChecks(t) ? `지난 ${esc(prevTripWithChecks(t).name)} 목록 가져오기` : "기본 준비 목록 넣기"}</button>`}
+    <form class="ck-add" id="ck-form" autocomplete="off"><input id="ck-new" placeholder="준비할 것 더하기" enterkeyhint="done" value="${esc(typed)}"><button class="press" aria-label="더하기">${I("pen")}</button></form>
+    ${t.place ? `<div class="fld">${esc(t.place)}에서<div class="seg">
+      <button class="press" data-go="buy">살 것 ${n.buy}</button><button class="press" data-go="cand">후보 ${n.cand}</button></div></div>` : ""}
+    <div class="sh-actions">
+      <button class="btn-ghost danger press" id="t-del">여행 지우기</button>
+      <button class="btn-primary press" id="t-edit">날짜·이름 고치기</button>
+    </div>`);
+  const sh = $("sheet");
+  sh.querySelectorAll("[data-pp]").forEach((b) => b.addEventListener("click", () => {
+    const p = b.dataset.pp, ppl = new Set(t.people || []);
+    ppl.has(p) ? ppl.delete(p) : ppl.add(p);
+    saveTrip(t, { people: [...ppl] });
+  }));
+  sh.querySelector("[data-pp-add]").addEventListener("click", () => {
+    const p = (prompt("같이 가는 사람 이름") || "").trim();
+    if (p && !(t.people || []).includes(p)) saveTrip(t, { people: [...(t.people || []), p] });
   });
-  $("logout").addEventListener("click", async () => { await sb.auth.signOut(); location.reload(); });
+  sh.querySelectorAll("[data-ck]").forEach((row) => row.addEventListener("click", async (e) => {
+    if (e.target.closest("[data-ck-del]")) return;
+    const c = checks.find((x) => x.id === row.dataset.ck); if (!c) return;
+    const on = !c.done;
+    row.querySelector(".strike").setAttribute("class", "strike by-" + me.member_code);
+    row.classList.toggle("struck", on);
+    await new Promise((r) => setTimeout(r, 240));
+    saveCheck(c, { done: on, done_by: on ? me.member_code : null, done_at: on ? new Date().toISOString() : null });
+  }));
+  sh.querySelectorAll("[data-ck-del]").forEach((b) => b.addEventListener("click", () => {
+    const c = checks.find((x) => x.id === b.dataset.ckDel); if (c) saveCheck(c, { deleted_at: new Date().toISOString() });
+  }));
+  $("ck-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = $("ck-new").value.trim(); if (!text) return;
+    $("ck-new").value = "";
+    addChecks(t, [text]).then(() => $("ck-new")?.focus());
+  });
+  $("ck-fill")?.addEventListener("click", () => {
+    const prev = prevTripWithChecks(t);
+    addChecks(t, prev ? checksOf(prev.id).map((c) => c.text) : (TEMPLATE[t.place] || TEMPLATE[""]));
+  });
+  sh.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => { openTripId = null; closeSheet(); goTab(b.dataset.go); }));
+  $("t-edit").addEventListener("click", () => openTripForm(t));
+  const del = $("t-del");
+  del.addEventListener("click", async () => {
+    if (!del.classList.contains("armed")) { del.classList.add("armed"); del.textContent = "한 번 더 누르면 지워요"; return; }
+    openTripId = null; closeSheet();
+    const gone = [t, ...trips.filter((x) => x.parent_id === t.id)];
+    for (const x of gone) await saveTrip(x, { deleted_at: new Date().toISOString() });
+    toast("여행을 지웠어요.");
+  });
+}
+// 같은 장소의 가장 최근 지난 여행(체크리스트가 있는 것) — 새 여행 체크리스트를 복사해 올 곳
+function prevTripWithChecks(t) {
+  return trips.filter((x) => x.id !== t.id && x.place === t.place && x.start_date < t.start_date && checksOf(x.id).length)
+    .sort((a, b) => b.start_date.localeCompare(a.start_date))[0];
+}
+async function addChecks(t, texts) {
+  const base = Math.max(0, ...checksOf(t.id).map((c) => c.sort));
+  const rows = texts.map((text, i) => ({ id: uuid(), trip_id: t.id, text, sort: base + i + 1, done: false, created_by: me.member_code, created_at: new Date().toISOString() }));
+  checks.push(...rows); openTrip(t.id, true); render();
+  const { error } = await sb.from("bt_checks").insert(rows);
+  if (error) { checks = checks.filter((c) => !rows.includes(c)); openTrip(t.id, true); toast("더하지 못했어요: " + error.message); }
+}
+async function saveTrip(t, fields) {
+  const before = { ...t };
+  Object.assign(t, fields);
+  if (fields.deleted_at) trips = trips.filter((x) => x !== t);
+  render(); if (openTripId === t.id && !fields.deleted_at) openTrip(t.id, true);
+  const { error } = await sb.from("bt_trips").update(fields).eq("id", t.id);
+  if (error) { Object.assign(t, before); if (!trips.includes(t)) trips.push(t); render(); toast("저장하지 못했어요: " + error.message); return false; }
+  return true;
+}
+async function saveCheck(c, fields) {
+  const before = { ...c };
+  Object.assign(c, fields);
+  if (fields.deleted_at) checks = checks.filter((x) => x !== c);
+  render(); if (openTripId) openTrip(openTripId, true);
+  const { error } = await sb.from("bt_checks").update(fields).eq("id", c.id);
+  if (error) { Object.assign(c, before); if (!checks.includes(c)) checks.push(c); render(); if (openTripId) openTrip(openTripId, true); toast("저장하지 못했어요: " + error.message); }
+}
+
+// 새 여행 / 고치기
+function openTripForm(t) {
+  const isNew = !t;
+  openTripId = null; // 폼을 쓰는 동안 실시간 갱신이 여행 시트로 덮어쓰지 않게
+  const tops = trips.filter((x) => !x.parent_id && x.id !== t?.id);
+  openSheet(`<div class="sh-title">${isNew ? "새 여행" : "여행 고치기"}</div>
+    <label class="fld">이름<input class="big" id="f-name" value="${esc(t?.name)}" placeholder="예: 일본, 부산 1박"></label>
+    <label class="fld">장소<input id="f-place" value="${esc(t?.place)}" list="f-places" placeholder="예: 일본, 후쿠오카"><datalist id="f-places">${[...new Set(["한국", "일본", ...trips.map((x) => x.place).filter(Boolean)])].map((p) => `<option value="${esc(p)}">`).join("")}</datalist></label>
+    <div class="row2">
+      <label class="fld">시작<input id="f-start" type="date" value="${esc(t?.start_date)}"></label>
+      <label class="fld">끝<input id="f-end" type="date" value="${esc(t?.end_date)}"></label>
+    </div>
+    <div class="fld">어느 여행 안에?<div class="seg" id="f-parent">
+      <button class="${!t?.parent_id ? "on" : ""}" data-parent="">따로 떠나는 여행</button>
+      ${tops.map((x) => `<button class="${t?.parent_id === x.id ? "on" : ""}" data-parent="${x.id}">${esc(x.name)} 안</button>`).join("")}</div></div>
+    <label class="fld">메모<textarea id="f-note" placeholder="예: 후쿠오카 · 남편은 부산에서 합류">${esc(t?.note)}</textarea></label>
+    <div class="sh-actions">${isNew ? "" : `<button class="btn-ghost press" id="f-back">돌아가기</button>`}<button class="btn-primary press" id="f-save">${isNew ? "만들기" : "저장"}</button></div>
+    ${isNew ? `<p class="sh-meta">만들면 준비 체크리스트가 같이 들어가요 — 같은 장소의 지난 여행이 있으면 그 목록, 없으면 기본 목록.</p>` : ""}`);
+  let parent = t?.parent_id || "";
+  $("sheet").querySelectorAll("[data-parent]").forEach((b) => b.addEventListener("click", () => {
+    parent = b.dataset.parent;
+    $("sheet").querySelectorAll("[data-parent]").forEach((x) => x.classList.toggle("on", x === b));
+    const p = trips.find((x) => x.id === parent);
+    if (p && !$("f-start").value) { $("f-start").value = p.start_date; $("f-end").value = p.start_date; }
+  }));
+  $("f-back")?.addEventListener("click", () => openTrip(t.id));
+  $("f-save").addEventListener("click", async () => {
+    const f = { name: $("f-name").value.trim(), place: $("f-place").value.trim() || null, start_date: $("f-start").value, end_date: $("f-end").value || $("f-start").value,
+      parent_id: parent || null, note: $("f-note").value.trim() || null };
+    if (!f.name) return toast("이름을 적어 주세요.");
+    if (!f.start_date) return toast("시작 날짜를 골라 주세요.");
+    if (f.end_date < f.start_date) return toast("끝 날짜가 시작보다 앞이에요.");
+    if (!isNew) { await saveTrip(t, f); return openTrip(t.id); }
+    const row = { id: uuid(), ...f, people: parent ? [] : [me.member_code], created_by: me.member_code, created_at: new Date().toISOString() };
+    trips.push(row); render();
+    const { error } = await sb.from("bt_trips").insert(row);
+    if (error) { trips = trips.filter((x) => x !== row); render(); closeSheet(); return toast(error.code === "42P01" ? "여행 표가 아직 없어요. migrations/004_trips.sql을 실행해 주세요." : "만들지 못했어요: " + error.message); }
+    const prev = prevTripWithChecks(row);
+    await addChecks(row, prev ? checksOf(prev.id).map((c) => c.text) : (TEMPLATE[row.place] || TEMPLATE[""]));
+    openTrip(row.id);
+  });
 }
 
 // ───────────────────────────── 시트 열고 닫기
@@ -447,8 +663,8 @@ function closeSheet() {
   sh.classList.remove("in"); bk.classList.remove("in");
   closeSheet.t = setTimeout(() => { sh.hidden = true; bk.hidden = true; sh.innerHTML = ""; }, 260);
 }
-$("sheet-back").addEventListener("click", closeSheet);
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("sheet").hidden) closeSheet(); });
+$("sheet-back").addEventListener("click", () => { openTripId = null; closeSheet(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("sheet").hidden) { openTripId = null; closeSheet(); } });
 
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js");
 boot();

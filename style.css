@@ -60,8 +60,8 @@ svg.i { width: 1em; height: 1em; stroke: currentColor; fill: none; stroke-width:
 /* 손으로 긋는 줄 — 그은 사람 색 */
 .strike { position: absolute; left: -3px; width: calc(100% + 6px); top: 55%; height: 10px; transform: translateY(-50%); overflow: visible; pointer-events: none; }
 .strike path { fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 1 2; stroke-dashoffset: 1; opacity: 0; transition: stroke-dashoffset 220ms var(--ease), opacity 60ms linear; }
-.it.struck .strike path { stroke-dashoffset: 0; opacity: 1; }
-.it.struck .nm { opacity: .5; }
+.struck .strike path { stroke-dashoffset: 0; opacity: 1; }
+.struck .nm { opacity: .5; }
 .strike path, .strike.by-MK path { stroke: var(--mk); }
 .strike.by-KM path { stroke: var(--km); }
 .mt { display: flex; flex-wrap: wrap; gap: 3px 10px; margin-top: 3px; font-size: .72rem; color: var(--faint); align-items: center; }
@@ -119,6 +119,36 @@ svg.i { width: 1em; height: 1em; stroke: currentColor; fill: none; stroke-width:
 .btn-ghost.danger.armed { color: #fff; background: var(--mk); }
 .sh-meta { font-size: .72rem; color: var(--faint); margin-top: 14px; line-height: 1.6; }
 .place-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+
+/* ── 여행 ── */
+.trip-card { width: 100%; display: grid; gap: 3px; padding: 16px 0 14px; border-bottom: 1px solid var(--rule); text-align: left; }
+.trip-card.child { padding-left: 16px; border-left: 2px solid var(--rule); margin-left: 4px; width: calc(100% - 4px); }
+.tc-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.tc-name { font-family: "Nanum Pen Script", cursive; font-size: 1.9rem; line-height: 1.1; }
+.trip-card.child .tc-name { font-size: 1.55rem; }
+.tc-when { font-size: .78rem; font-weight: 700; color: var(--ink); white-space: nowrap; }
+.tc-meta { font-size: .76rem; color: var(--faint); }
+.tc-bar { display: block; height: 3px; background: var(--rule); border-radius: 2px; margin: 6px 0 1px; overflow: hidden; }
+.tc-bar i { display: block; height: 100%; background: var(--ink); border-radius: 2px; }
+.pp { font-weight: 500; color: var(--ink); }
+.pp.MK { color: var(--mk); } .pp.KM { color: var(--km); }
+.pp.none { color: var(--faint); font-weight: 400; text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+.trip-add { display: inline-flex; align-items: center; gap: 6px; margin: 18px 0 4px; padding: 10px 14px; border: 1px dashed #cfcdc6; border-radius: 10px; font-size: .84rem; color: var(--ink); }
+.foot { margin-top: 28px; }
+.linkish { font-size: inherit; color: var(--faint); text-decoration: underline; text-underline-offset: 2px; padding: 0; }
+.trip-sub { font-size: .8rem; color: var(--faint); margin-top: -2px; }
+.trip-note { font-size: .84rem; margin-top: 8px; line-height: 1.5; }
+.ck-count { color: var(--ink); font-weight: 700; margin-left: 4px; }
+.ck-list { margin-top: 4px; }
+.ck-row { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--rule); cursor: pointer; user-select: none; -webkit-user-select: none; }
+.ck-row .nm { flex: 0 1 auto; font-size: .95rem; color: var(--ink); }
+.ck-x { margin-left: auto; color: #c9c7bf; width: 30px; height: 26px; display: grid; place-items: center; flex: none; }
+.ck-x svg.i { width: 15px; height: 15px; }
+.ck-add { display: flex; gap: 8px; margin-top: 10px; }
+.ck-add input { flex: 1; font-size: 16px; padding: 9px 12px; border: 1px solid var(--rule); border-radius: 10px; background: var(--wash); min-width: 0; }
+.ck-add button { width: 40px; display: grid; place-items: center; }
+.ck-add button svg.i { width: 19px; height: 19px; }
+#ck-fill { margin-top: 8px; border: 1px dashed #cfcdc6; }
 
 #toast { position: fixed; left: 50%; bottom: calc(var(--safe-b) + 130px); transform: translate(-50%, 8px); background: var(--ink); color: #fff; font-size: .82rem; padding: 10px 16px; border-radius: 99px; opacity: 0; pointer-events: none; transition: opacity 180ms ease, transform 180ms var(--ease); z-index: 20; max-width: calc(100% - 40px); }
 #toast.on { opacity: 1; transform: translate(-50%, 0); }

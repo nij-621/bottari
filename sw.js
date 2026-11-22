@@ -1,6 +1,6 @@
 // Bottari SW — 앱 셸만 캐시. Supabase 응답은 절대 캐시하지 않음.
 // 배포할 때 CACHE와 app.js의 VERSION을 같이 올릴 것
-const CACHE = "bottari-v1.2";
+const CACHE = "bottari-v1.4";
 const SHELL = ["./", "./index.html", "./style.css", "./app.js", "./config.js", "./manifest.webmanifest", "./icon-180.png"];
 
 self.addEventListener("install", (e) => {
