@@ -3,7 +3,7 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm";
 import { SUPABASE_URL, SUPABASE_KEY } from "./config.js";
 
-const VERSION = "1.4";
+const VERSION = "1.5";
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const NAME = { MK: "민경", KM: "규문" };
@@ -13,9 +13,12 @@ const BUY_CATS = ["식품", "뷰티", "옷·신발", "생활", "기타"];       
 const NOCAT = "분류 안 함";
 const NOPLACE = "미분류";
 const ANYONE = "나눠 줄 것";   // 선물: 받는 사람을 안 정한 것 (친구·지인용 과자 등)
-const KIND = { buy: "살 것", cand: "후보", gift: "선물" };
-const TO = { buy: "살 것으로", cand: "후보로", gift: "선물로" };
-const HOME_PLACE = { buy: "한국", cand: null, gift: "오스트리아" }; // 장소 기본값 (이 값이면 태그 안 보임)
+const KIND = { buy: "살 것", cand: "후보", gift: "선물", ref: "참고" };
+const TO = { buy: "살 것으로", cand: "후보로", gift: "선물로", ref: "참고로" };
+const HOME_PLACE = { buy: "한국", cand: null, gift: "오스트리아", ref: null }; // 장소 기본값 (이 값이면 태그 안 보임) · 참고는 장소 대신 주제(topic)
+const NOTOPIC = "주제 없음";
+const TOPIC_HINTS = ["쇼핑·텍스리펀", "외출·교통", "병원·예약", "행정·은행", "일본"]; // 참고 주제 예시 (자유롭게 더함)
+const URL_RE = /(https?:\/\/\S+|[a-z0-9-]+(?:\.[a-z0-9-]+)+\/\S*)/i;
 // 새 여행의 준비 체크리스트 — 같은 장소의 지난 여행이 있으면 그걸 복사하고, 없으면 이 목록
 const TEMPLATE = {
   "한국": ["항공권", "공항 가는 길", "한국 유심·로밍", "원화 현금", "선물 다 샀나", "집 비우기 (우편·화분·난방)", "짐 무게 확인 (갈 때·올 때)"],
@@ -74,6 +77,8 @@ const DEMO_ITEMS = () => {
     ...[["엄마", "마너 초콜릿", { qty: 2 }], ["엄마", "핸드크림", { status: "got", ordered_by: "MK" }], ["아버님", "슈납스", { created_by: "KM" }],
       ["어머님", "율리어스 마이늘 커피", { created_by: "KM", status: "got", ordered_by: "KM" }], [null, "모차르트쿠겔", { qty: 6 }], [null, "마너 웨하스", { qty: 4, created_by: "KM" }]]
       .map(([r, text, o]) => ({ id: uuid(), kind: "gift", recipient: r, text, place: "오스트리아", status: "todo", created_by: "MK", created_at: t(80), ...o })),
+    { id: uuid(), kind: "ref", text: "서울 인파레이더", link: "http://gjdong.vercel.app/crowd", topic: "외출·교통", status: "todo", created_by: "MK", created_at: t(70) },
+    { id: uuid(), kind: "ref", text: "텍스리펀 방법", note: "공항 키오스크 → 세관 도장 → 환급 창구", topic: "쇼핑·텍스리펀", status: "todo", created_by: "MK", created_at: t(69) },
   ];
 };
 const DEMO_TRIPS = () => {
@@ -174,7 +179,7 @@ async function patch(it, fields) {
 // ───────────────────────────── 그리기
 const strikeSvg = (by) => `<svg class="strike by-${by || me?.member_code || "MK"}" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M1 6.5 C 18 3.5, 34 7.5, 52 5 S 84 3.8, 99 5.6"/></svg>`;
 // 줄이 그어지는 상태: 살 것 = 받음, 후보 = 잡음·함, 선물 = 줌 (선물의 "샀음"은 아직 줄 안 그음)
-const isStruck = (it) => it.kind === "gift" ? it.status === "done" : (it.status === "got" || it.status === "done");
+const isStruck = (it) => it.kind === "ref" ? false : it.kind === "gift" ? it.status === "done" : (it.status === "got" || it.status === "done");
 
 function host(url) { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; } }
 function itemHtml(it) {
@@ -189,13 +194,13 @@ function itemHtml(it) {
   } else if (it.kind === "gift") {
     if (it.status === "got" || it.status === "done") meta.push(`<span class="bought">${I("check")}${it.ordered_by ? NAME[it.ordered_by] + "이 삼" : "샀음"}</span>`);
     if (it.place && it.place !== HOME_PLACE.gift) meta.push(`<span class="tg">${esc(it.place)}</span>`);
-  } else {
+  } else if (it.kind === "cand") {
     if (it.cat) meta.push(`<span>${esc(it.cat)}</span>`);
     if (it.scheduled) meta.push(`<span>${I("cal")}${esc(it.scheduled)}</span>`);
   }
   if (it.note) meta.push(`<span>${esc(it.note)}</span>`);
   if (it.link) meta.push(`<a href="${esc(it.link)}" target="_blank" rel="noopener">${I("link")}${esc(host(it.link))}</a>`);
-  return `<div class="it ${it.created_by}${isStruck(it) ? " struck" : ""}" data-id="${it.id}" role="button" tabindex="0">
+  return `<div class="it ${it.created_by}${isStruck(it) ? " struck" : ""}${it.kind === "ref" ? " ref" : ""}" data-id="${it.id}" role="button" tabindex="0">
     <div class="tx"><span class="nm">${esc(it.text)}${it.qty > 1 ? `<span class="qty">×${it.qty}</span>` : ""}${strikeSvg(it.done_by)}</span>
     ${meta.length ? `<div class="mt">${meta.join("")}</div>` : ""}</div>
     <button class="more" data-edit="${it.id}" aria-label="고치기">${I("more")}</button></div>`;
@@ -214,8 +219,8 @@ function render() {
   document.querySelector(".key").hidden = tab === "trip";
   if (tab === "trip") { $("list").innerHTML = tripsHtml(); return; }
   const place = state.place[tab];
-  $("add-place").innerHTML = `${I("pin")}${esc(place || NOPLACE)}`;
-  $("add-text").placeholder = { buy: "살 것 한 줄", cand: "하고 싶은 것 한 줄", gift: "엄마: 마너 초콜릿" }[tab];
+  $("add-place").innerHTML = tab === "ref" ? `${I("bookmark")}${esc(place || NOTOPIC)}` : `${I("pin")}${esc(place || NOPLACE)}`;
+  $("add-text").placeholder = { buy: "살 것 한 줄", cand: "하고 싶은 것 한 줄", gift: "엄마: 마너 초콜릿", ref: "제목 + 링크 붙여넣기" }[tab];
 
   const mine = items.filter((x) => x.kind === tab);
   const keep = (x) => !isStruck(x) || recent.has(x.id);
@@ -243,6 +248,14 @@ function render() {
     html = (mine.length ? `<p class="summary">아직 안 산 것 <b>${notYet}</b> · 캐리어에 <b>${packed}</b></p>` : "")
       + order.map((k) => sec(k, groups.get(k))).join("") + fold("given", "준 것", mine.filter((x) => x.status === "done" && !recent.has(x.id)));
     if (!mine.length) html = `<p class="empty">한국에 들고 갈 선물을 적어요. <b>엄마: 마너 초콜릿</b>처럼 앞에 받는 사람을 쓰면 사람별로 묶여요. 받는 사람 없이 쓰면 "나눠 줄 것"에 모여요.</p>`;
+  } else if (tab === "ref") {
+    // 주제별로 묶음(많은 주제 먼저), 주제 없는 건 맨 아래
+    const groups = new Map();
+    for (const x of mine) { const k = x.topic || NOTOPIC; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(x); }
+    const order = [...groups.keys()].filter((k) => k !== NOTOPIC).sort((a, b) => groups.get(b).length - groups.get(a).length);
+    if (groups.has(NOTOPIC)) order.push(NOTOPIC);
+    html = order.map((k) => sec(esc(k), groups.get(k))).join("");
+    if (!mine.length) html = `<p class="empty">휴가 때마다 다시 여는 것을 모아 둬요. 텍스리펀 방법, 서울 인파레이더처럼요. 링크를 붙여넣거나 <b>제목 https://…</b>처럼 쓰면 제목과 링크가 나뉘어 들어가요. 줄은 안 그어지고 계속 남아요.</p>`;
   } else {
     const live = mine.filter(keep);
     const groups = new Map();
@@ -293,6 +306,8 @@ $("list").addEventListener("keydown", (e) => {
 
 async function toggle(it, row) {
   if (!it) return;
+  // 참고: 누르면 링크를 엶 (링크 없으면 고치기)
+  if (it.kind === "ref") return it.link ? window.open(/^https?:/i.test(it.link) ? it.link : "https://" + it.link, "_blank", "noopener") : openEdit(it);
   if (it.kind === "gift") return giftStep(it, row);
   const on = !isStruck(it);
   const next = on ? (it.kind === "buy" ? "got" : "done") : (it.kind === "buy" && it.ordered_by ? "ord" : "todo");
@@ -342,9 +357,19 @@ $("add").addEventListener("submit", async (e) => {
   let recipient = null, body = raw;
   const rm = state.tab === "gift" && raw.match(/^([^:：]{1,20})[:：]\s*(.+)$/);
   if (rm) { recipient = rm[1].trim(); body = rm[2].trim(); }
-  const { text, qty } = parseQty(body);
-  const row = { id: uuid(), kind: state.tab, text, qty: qty > 1 ? qty : null, place: state.place[state.tab] || null,
-    status: "todo", created_by: me.member_code, created_at: new Date().toISOString(), ...(state.tab === "gift" ? { recipient } : {}) };
+  let row;
+  if (state.tab === "ref") {
+    // 참고: 글 안의 링크를 떼어 냄. 제목이 없으면 주소(도메인)를 제목으로
+    const um = raw.match(URL_RE);
+    const link = um ? um[1] : null;
+    const title = (link ? raw.replace(link, "") : raw).trim().replace(/[\s:–—-]+$/, "");
+    row = { id: uuid(), kind: "ref", text: title || host(/^https?:/i.test(link) ? link : "https://" + link), link, topic: state.place.ref || null,
+      status: "todo", created_by: me.member_code, created_at: new Date().toISOString() };
+  } else {
+    const { text, qty } = parseQty(body);
+    row = { id: uuid(), kind: state.tab, text, qty: qty > 1 ? qty : null, place: state.place[state.tab] || null,
+      status: "todo", created_by: me.member_code, created_at: new Date().toISOString(), ...(state.tab === "gift" ? { recipient } : {}) };
+  }
   items.push(row);
   $("add-text").value = "";
   render();
@@ -356,18 +381,21 @@ $("add-place").addEventListener("click", openPlacePicker);
 
 function placesOf(kind) {
   const n = new Map();
-  for (const x of items) if (x.kind === kind && x.place) n.set(x.place, (n.get(x.place) || 0) + 1);
+  const key = kind === "ref" ? "topic" : "place"; // 참고는 장소 대신 주제
+  for (const x of items) if (x.kind === kind && x[key]) n.set(x[key], (n.get(x[key]) || 0) + 1);
+  if (kind === "ref") for (const h of TOPIC_HINTS) if (!n.has(h)) n.set(h, 0);
   if (HOME_PLACE[kind] && !n.has(HOME_PLACE[kind])) n.set(HOME_PLACE[kind], 0);
   return [...n.keys()].sort((a, b) => n.get(b) - n.get(a));
 }
 function openPlacePicker() {
   const tab = state.tab, cur = state.place[tab];
-  const list = [...placesOf(tab), ...(tab === "cand" ? [NOPLACE] : [])];
-  openSheet(`<div class="sh-title">어디서?</div>
-    <div class="place-list seg">${list.map((p) => `<button class="press${(cur || NOPLACE) === p ? " on" : ""}" data-place="${esc(p)}">${esc(p)}</button>`).join("")}</div>
-    <label class="fld">새 장소<input id="new-place" placeholder="예: 부산, 후쿠오카" enterkeyhint="done"></label>
-    <div class="sh-actions"><button class="btn-primary press" id="place-ok">새 장소로 적기</button></div>`);
-  const pick = (p) => { state.place[tab] = p === NOPLACE ? null : p; save("bt.place", state.place); closeSheet(); render(); $("add-text").focus(); };
+  const ref = tab === "ref", none = ref ? NOTOPIC : NOPLACE;
+  const list = [...placesOf(tab), ...(tab === "cand" || ref ? [none] : [])];
+  openSheet(`<div class="sh-title">${ref ? "어떤 주제?" : "어디서?"}</div>
+    <div class="place-list seg">${list.map((p) => `<button class="press${(cur || none) === p ? " on" : ""}" data-place="${esc(p)}">${esc(p)}</button>`).join("")}</div>
+    <label class="fld">${ref ? "새 주제" : "새 장소"}<input id="new-place" placeholder="${ref ? "예: 공항, 통신" : "예: 부산, 후쿠오카"}" enterkeyhint="done"></label>
+    <div class="sh-actions"><button class="btn-primary press" id="place-ok">${ref ? "새 주제로 적기" : "새 장소로 적기"}</button></div>`);
+  const pick = (p) => { state.place[tab] = p === none ? null : p; save("bt.place", state.place); closeSheet(); render(); $("add-text").focus(); };
   $("sheet").querySelectorAll("[data-place]").forEach((b) => b.addEventListener("click", () => pick(b.dataset.place)));
   const ok = () => { const v = $("new-place").value.trim(); if (v) pick(v); };
   $("place-ok").addEventListener("click", ok);
@@ -378,7 +406,7 @@ function openPlacePicker() {
 function openEdit(it) {
   if (!it) return;
   const d = { ...it };
-  const kind = it.kind, buy = kind === "buy", gift = kind === "gift";
+  const kind = it.kind, buy = kind === "buy", gift = kind === "gift", ref = kind === "ref";
   const stepper = () => `<div class="fld">수량<div class="stepper"><button data-q="-1" aria-label="하나 빼기">−</button><span id="e-qty">${d.qty || 1}</span><button data-q="1" aria-label="하나 더">+</button></div></div>`;
   const stSeg = (opts) => `<div class="fld">상태<div class="seg" id="e-st">
         ${opts.map(([v, l]) => `<button class="${d.status === v ? "on" : ""}" data-st="${v}">${l}</button>`).join("")}</div></div>`;
@@ -386,7 +414,7 @@ function openEdit(it) {
   const draw = () => {
     openSheet(`<div class="sh-title">${KIND[kind]} 고치기</div>
       ${gift ? `<label class="fld">받는 사람<input id="e-rcp" value="${esc(d.recipient)}" list="e-rcps" placeholder="비우면 나눠 줄 것"><datalist id="e-rcps">${recipients().map((r) => `<option value="${esc(r)}">`).join("")}</datalist></label>` : ""}
-      <label class="fld">${gift ? "선물" : "이름"}<input class="big" id="e-text" value="${esc(d.text)}"></label>
+      <label class="fld">${gift ? "선물" : ref ? "제목" : "이름"}<input class="big" id="e-text" value="${esc(d.text)}"></label>
       ${buy ? `
       <div class="fld">분류<div class="seg" id="e-cat">
         ${BUY_CATS.map((c) => `<button class="${d.cat === c ? "on" : ""}" data-cat="${c}">${c}</button>`).join("")}</div></div>
@@ -399,12 +427,13 @@ function openEdit(it) {
       ` : gift ? `
       ${stepper()}
       ${stSeg([["todo", "살 것"], ["got", "샀음 · 캐리어"], ["done", "줌"]])}
-      ` : `
+      ` : kind === "cand" ? `
       <div class="fld">종류<div class="seg" id="e-cat">
         ${CATS.map((c) => `<button class="${d.cat === c ? "on" : ""}" data-cat="${c}">${c}</button>`).join("")}</div></div>
       <label class="fld">잡은 날<input id="e-sch" value="${esc(d.scheduled)}" placeholder="캘린더에 옮겼으면 날짜 (예: 12/20)"></label>
-      `}
-      <label class="fld">${gift ? "사는 곳" : "장소"}<input id="e-place" value="${esc(d.place)}" list="e-places" placeholder="${HOME_PLACE[kind] || "비우면 미분류"}"><datalist id="e-places">${placesOf(kind).map((p) => `<option value="${esc(p)}">`).join("")}</datalist></label>
+      ` : ""}
+      ${ref ? `<label class="fld">주제<input id="e-place" value="${esc(d.topic)}" list="e-places" placeholder="비우면 주제 없음"><datalist id="e-places">${placesOf(kind).map((p) => `<option value="${esc(p)}">`).join("")}</datalist></label>`
+        : `<label class="fld">${gift ? "사는 곳" : "장소"}<input id="e-place" value="${esc(d.place)}" list="e-places" placeholder="${HOME_PLACE[kind] || "비우면 미분류"}"><datalist id="e-places">${placesOf(kind).map((p) => `<option value="${esc(p)}">`).join("")}</datalist></label>`}
       <label class="fld">메모<textarea id="e-note" placeholder="${gift ? "예: 빌라 매장, 공항 면세점" : "예: 텍스리펀, 코트용"}">${esc(d.note)}</textarea></label>
       <label class="fld">링크<input id="e-link" type="url" inputmode="url" value="${esc(d.link)}" placeholder="https://"></label>
       <div class="fld">옮기기<div class="seg">${Object.keys(KIND).filter((k) => k !== kind).map((k) => `<button class="press" data-move="${k}">${TO[k]}</button>`).join("")}</div></div>
@@ -415,7 +444,8 @@ function openEdit(it) {
       <p class="sh-meta">${NAME[it.created_by]}이 적음 · ${new Date(it.created_at).toLocaleDateString("ko-KR")}${it.done_by ? ` · ${NAME[it.done_by]}이 그음` : ""}</p>`);
     const sh = $("sheet");
     const grab = () => { // 다시 그리기 전에 입력값 보존
-      d.text = $("e-text").value; d.note = $("e-note").value; d.link = $("e-link").value; d.place = $("e-place").value;
+      d.text = $("e-text").value; d.note = $("e-note").value; d.link = $("e-link").value;
+      if (ref) d.topic = $("e-place").value; else d.place = $("e-place").value;
       if ($("e-eta")) d.eta = $("e-eta").value;
       if ($("e-sch")) d.scheduled = $("e-sch").value;
       if ($("e-rcp")) d.recipient = $("e-rcp").value;
@@ -440,9 +470,11 @@ function openEdit(it) {
       const text = d.text.trim(); if (!text) return toast(gift ? "선물을 적어 주세요." : "이름을 적어 주세요.");
       const wasStruck = isStruck(it), nowStruck = isStruck({ ...it, status: d.status });
       const fields = {
-        text, note: d.note.trim() || null, link: d.link.trim() || null, place: d.place.trim() || null,
+        text, note: d.note.trim() || null, link: d.link.trim() || null,
+        ...(ref ? { topic: d.topic?.trim() || null } : { place: d.place?.trim() || null }),
         ...(buy ? { cat: d.cat || null, qty: d.qty > 1 ? d.qty : null, status: d.status, ordered_by: d.ordered_by || null, ship_to: d.ship_to || null, eta: d.eta?.trim() || null }
           : gift ? { qty: d.qty > 1 ? d.qty : null, status: d.status, ordered_by: d.ordered_by || null, recipient: d.recipient?.trim() || null }
+          : ref ? {}
           : { cat: d.cat || null, scheduled: d.scheduled?.trim() || null }),
         ...(wasStruck !== nowStruck ? { done_by: nowStruck ? me.member_code : null, done_at: nowStruck ? new Date().toISOString() : null } : {}),
       };
@@ -453,7 +485,7 @@ function openEdit(it) {
       closeSheet();
       const to = b.dataset.move;
       // 분류 목록이 탭마다 달라서(후보 종류 ≠ 살 것 분류) 옮길 때 비움
-      if (await patch(it, { kind: to, status: "todo", cat: null, ordered_by: null, ship_to: null, eta: null, done_by: null, done_at: null, place: HOME_PLACE[to] }))
+      if (await patch(it, { kind: to, status: "todo", cat: null, topic: null, ordered_by: null, ship_to: null, eta: null, done_by: null, done_at: null, place: HOME_PLACE[to] }))
         toast(`${TO[to]} 옮겼어요.`);
     }));
     const del = $("e-del");
